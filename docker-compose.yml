@@ -1,0 +1,51 @@
+version: '3.8'
+services:
+  localstack:
+    image: localstack/localstack:latest
+    ports:
+      - "4566:4566"
+    environment:
+      - SERVICES=s3,sqs
+      - DEFAULT_REGION=us-east-1
+      - DATA_DIR=/tmp/localstack/data
+    volumes:
+      - localstack_data:/tmp/localstack
+
+  clamav:
+    image: mkodockx/docker-clamav:alpine
+    ports:
+      - "3310:3310"
+
+  app:
+    build: .
+    depends_on:
+      - localstack
+      - clamav
+    ports:
+      - "8080:8080"
+    environment:
+      - AWS_ENDPOINT=http://localstack:4566
+      - AWS_REGION=us-east-1
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - APPLICATION_SQS_QUEUEURL=
+      - APPLICATION_SQS_DLQURL=
+    restart: on-failure
+
+  setup:
+    image: localstack/localstack:latest
+    depends_on:
+      - localstack
+    entrypoint: ["/bin/sh","-c"]
+    command: >
+      "sleep 5;
+       awslocal s3 mb s3://upload-bucket || true;
+       awslocal sqs create-queue --queue-name upload-queue || true;
+       awslocal sqs create-queue --queue-name upload-dlq || true;
+       echo 'resources created';"
+    environment:
+      - SERVICES=s3,sqs
+    restart: 'no'
+
+volumes:
+  localstack_data:
