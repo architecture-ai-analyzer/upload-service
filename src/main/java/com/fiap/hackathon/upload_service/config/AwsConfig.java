@@ -7,7 +7,6 @@ import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
-import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.sqs.SqsClient;
 
 import java.net.URI;
@@ -32,27 +31,26 @@ public class AwsConfig {
 
     @Bean
     public S3Client s3Client() {
-        S3Client.Builder b = S3Client.builder().region(Region.of(region));
+        var b = S3Client.builder().region(Region.of(region));
         if (s3Endpoint != null && !s3Endpoint.isBlank()) {
-            b = b.endpointOverride(URI.create(s3Endpoint));
+            b.endpointOverride(URI.create(s3Endpoint));
         }
         if (accessKey != null && !accessKey.isBlank()) {
-            b = b.credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create(accessKey, secretKey)));
+            b.credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create(accessKey, secretKey)));
         }
         return b.build();
     }
 
-    @Bean
     // S3Presigner intentionally not exposed in this build; presigned URLs are generated externally or not used.
 
     @Bean
     public SqsClient sqsClient() {
-        SqsClient.Builder b = SqsClient.builder().region(Region.of(region));
+        var b = SqsClient.builder().region(Region.of(region));
         if (sqsEndpoint != null && !sqsEndpoint.isBlank()) {
-            b = b.endpointOverride(URI.create(sqsEndpoint));
+            b.endpointOverride(URI.create(sqsEndpoint));
         }
         if (accessKey != null && !accessKey.isBlank()) {
-            b = b.credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create(accessKey, secretKey)));
+            b.credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create(accessKey, secretKey)));
         }
         return b.build();
     }

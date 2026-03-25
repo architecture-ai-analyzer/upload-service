@@ -9,13 +9,13 @@ import software.amazon.awssdk.services.sqs.SqsClient;
 import software.amazon.awssdk.services.sqs.model.DeleteMessageRequest;
 import software.amazon.awssdk.services.sqs.model.Message;
 import software.amazon.awssdk.services.sqs.model.ReceiveMessageRequest;
-import software.amazon.awssdk.services.sqs.model.QueueAttributeName;
 
 import com.fiap.hackathon.upload_service.adapter.persistence.ProcessedMessageRepository;
 import com.fiap.hackathon.upload_service.infra.scanner.VirusScanner;
 import com.fiap.hackathon.upload_service.infra.scanner.ScanResult;
 import com.fiap.hackathon.upload_service.domain.Upload;
 import com.fiap.hackathon.upload_service.adapter.persistence.UploadRepository;
+import com.fiap.hackathon.upload_service.infra.aws.S3ClientWrapper;
 import com.fiap.hackathon.upload_service.infra.aws.SqsClientWrapper;
 
 import java.time.OffsetDateTime;
@@ -28,6 +28,7 @@ public class ScanWorker {
 
     private final SqsClient sqsClient;
     private final ProcessedMessageRepository processedMessageRepository;
+    private final S3ClientWrapper s3ClientWrapper;
     private final SqsClientWrapper sqsClientWrapper;
     private VirusScanner scanner;
     private UploadRepository uploadRepository;
@@ -41,9 +42,10 @@ public class ScanWorker {
     @Value("${application.sqs.maxRetries:5}")
     private int maxRetries;
 
-    public ScanWorker(SqsClient sqsClient, ProcessedMessageRepository processedMessageRepository, SqsClientWrapper sqsClientWrapper, VirusScanner scanner, UploadRepository uploadRepository) {
+    public ScanWorker(SqsClient sqsClient, ProcessedMessageRepository processedMessageRepository, S3ClientWrapper s3ClientWrapper, SqsClientWrapper sqsClientWrapper, VirusScanner scanner, UploadRepository uploadRepository) {
         this.sqsClient = sqsClient;
         this.processedMessageRepository = processedMessageRepository;
+        this.s3ClientWrapper = s3ClientWrapper;
         this.sqsClientWrapper = sqsClientWrapper;
         this.scanner = scanner;
         this.uploadRepository = uploadRepository;
@@ -58,7 +60,7 @@ public class ScanWorker {
                 .queueUrl(queueUrl)
                 .maxNumberOfMessages(5)
                 .waitTimeSeconds(10)
-                .attributeNames(QueueAttributeName.APPROXIMATE_RECEIVE_COUNT)
+            .attributeNamesWithStrings("ApproximateReceiveCount")
                 .build();
         List<Message> messages = sqsClient.receiveMessage(req).messages();
         for (Message m : messages) {
@@ -105,30 +107,29 @@ public class ScanWorker {
                 }
 
                 // download object to temp file
-                try {
-                    java.nio.file.Path tmp = java.nio.file.Files.createTempFile("scan-", ".bin");
-                    s3ClientWrapper.downloadToFile(s3Key, tmp);
-                    ScanResult result = scanner.scan(tmp);
-                    java.nio.file.Files.deleteIfExists(tmp);
+                java.nio.file.Path tmp = java.nio.file.Files.createTempFile("scan-", ".bin");
+                s3ClientWrapper.downloadToFile(s3Key, tmp);
+                ScanResult result = scanner.scan(tmp);
+                java.nio.file.Files.deleteIfExists(tmp);
 
-                    // update upload status
-                    if (uploadId != null) {
-                        try {
-                            java.util.UUID uid = java.util.UUID.fromString(uploadId);
-                            java.util.Optional<Upload> ou = uploadRepository.findById(uid);
-                            if (ou.isPresent()) {
-                                Upload up = ou.get();
-                                if (result.isInfected()) up.setStatus(com.fiap.hackathon.upload_service.domain.UploadStatus.QUARANTINED);
-                                else up.setStatus(com.fiap.hackathon.upload_service.domain.UploadStatus.SCANNED_OK);
-                                uploadRepository.save(up);
-                            }
-                        } catch (IllegalArgumentException ex) {
-                            // ignore bad uuid
+                // update upload status
+                if (uploadId != null) {
+                    try {
+                        java.util.UUID uid = java.util.UUID.fromString(uploadId);
+                        java.util.Optional<Upload> ou = uploadRepository.findById(uid);
+                        if (ou.isPresent()) {
+                            Upload up = ou.get();
+                            if (result.isInfected()) up.setStatus(com.fiap.hackathon.upload_service.domain.UploadStatus.QUARANTINED);
+                            else up.setStatus(com.fiap.hackathon.upload_service.domain.UploadStatus.SCANNED_OK);
+                            uploadRepository.save(up);
                         }
+                    } catch (IllegalArgumentException ex) {
+                        // ignore bad uuid
                     }
+                }
 
-                    // Mark processed
-                    processedMessageRepository.save(new com.fiap.hackathon.upload_service.adapter.persistence.ProcessedMessage(messageId, OffsetDateTime.now()));
+                // Mark processed
+                processedMessageRepository.save(new com.fiap.hackathon.upload_service.adapter.persistence.ProcessedMessage(messageId, OffsetDateTime.now()));
 
                 // delete from queue
                 sqsClient.deleteMessage(DeleteMessageRequest.builder().queueUrl(queueUrl).receiptHandle(m.receiptHandle()).build());
@@ -136,7 +137,7 @@ public class ScanWorker {
             } catch (Exception ex) {
                 log.error("Error processing message {}", messageId, ex);
                 // handle retry / DLQ
-                String rcStr = m.attributes().getOrDefault("ApproximateReceiveCount", "1");
+                String rcStr = m.attributesAsStrings().getOrDefault("ApproximateReceiveCount", "1");
                 int receiveCount = 1;
                 try { receiveCount = Integer.parseInt(rcStr); } catch (NumberFormatException ignore) {}
                 if (receiveCount >= maxRetries) {
