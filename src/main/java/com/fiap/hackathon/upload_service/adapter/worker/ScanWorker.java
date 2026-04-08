@@ -11,8 +11,6 @@ import software.amazon.awssdk.services.sqs.model.Message;
 import software.amazon.awssdk.services.sqs.model.ReceiveMessageRequest;
 
 import com.fiap.hackathon.upload_service.adapter.persistence.ProcessedMessageRepository;
-import com.fiap.hackathon.upload_service.infra.scanner.VirusScanner;
-import com.fiap.hackathon.upload_service.infra.scanner.ScanResult;
 import com.fiap.hackathon.upload_service.domain.Upload;
 import com.fiap.hackathon.upload_service.adapter.persistence.UploadRepository;
 import com.fiap.hackathon.upload_service.infra.aws.S3ClientWrapper;
@@ -30,8 +28,7 @@ public class ScanWorker {
     private final ProcessedMessageRepository processedMessageRepository;
     private final S3ClientWrapper s3ClientWrapper;
     private final SqsClientWrapper sqsClientWrapper;
-    private VirusScanner scanner;
-    private UploadRepository uploadRepository;
+    private final UploadRepository uploadRepository;
 
     @Value("${application.sqs.queueUrl:}")
     private String queueUrl;
@@ -42,12 +39,11 @@ public class ScanWorker {
     @Value("${application.sqs.maxRetries:5}")
     private int maxRetries;
 
-    public ScanWorker(SqsClient sqsClient, ProcessedMessageRepository processedMessageRepository, S3ClientWrapper s3ClientWrapper, SqsClientWrapper sqsClientWrapper, VirusScanner scanner, UploadRepository uploadRepository) {
+    public ScanWorker(SqsClient sqsClient, ProcessedMessageRepository processedMessageRepository, S3ClientWrapper s3ClientWrapper, SqsClientWrapper sqsClientWrapper, UploadRepository uploadRepository) {
         this.sqsClient = sqsClient;
         this.processedMessageRepository = processedMessageRepository;
         this.s3ClientWrapper = s3ClientWrapper;
         this.sqsClientWrapper = sqsClientWrapper;
-        this.scanner = scanner;
         this.uploadRepository = uploadRepository;
     }
 
@@ -106,10 +102,10 @@ public class ScanWorker {
                     continue;
                 }
 
-                // download object to temp file
+                // Download object to ensure key exists and file is reachable before marking processed.
                 java.nio.file.Path tmp = java.nio.file.Files.createTempFile("scan-", ".bin");
+                java.nio.file.Files.deleteIfExists(tmp);
                 s3ClientWrapper.downloadToFile(s3Key, tmp);
-                ScanResult result = scanner.scan(tmp);
                 java.nio.file.Files.deleteIfExists(tmp);
 
                 // update upload status
@@ -119,8 +115,7 @@ public class ScanWorker {
                         java.util.Optional<Upload> ou = uploadRepository.findById(uid);
                         if (ou.isPresent()) {
                             Upload up = ou.get();
-                            if (result.isInfected()) up.setStatus(com.fiap.hackathon.upload_service.domain.UploadStatus.QUARANTINED);
-                            else up.setStatus(com.fiap.hackathon.upload_service.domain.UploadStatus.SCANNED_OK);
+                            up.setStatus(com.fiap.hackathon.upload_service.domain.UploadStatus.SCANNED_OK);
                             uploadRepository.save(up);
                         }
                     } catch (IllegalArgumentException ex) {

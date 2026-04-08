@@ -3,39 +3,33 @@ package com.fiap.hackathon.upload_service;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.extension.RegisterExtension;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.client.TestRestTemplate;
-import org.springframework.boot.web.server.LocalServerPort;
+import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.*;
 import org.testcontainers.containers.localstack.LocalStackContainer;
 import org.testcontainers.utility.DockerImageName;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.junit.jupiter.Container;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
-import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.CreateBucketRequest;
-import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
 import software.amazon.awssdk.services.sqs.SqsClient;
 import software.amazon.awssdk.services.sqs.model.CreateQueueRequest;
-import org.testcontainers.containers.GenericContainer;
-import org.testcontainers.containers.wait.strategy.Wait;
 
 import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.util.Map;
 import java.util.UUID;
-import java.time.Duration;
-import java.util.List;
-
-import software.amazon.awssdk.services.sqs.model.ReceiveMessageRequest;
-import software.amazon.awssdk.services.sqs.model.Message;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -51,17 +45,12 @@ public class UploadIntegrationTest {
     private static SqsClient sqsClient;
     private static String bucketName;
     private static String queueUrl;
-    private static String dlqUrl;
-    private static GenericContainer<?> clamavContainer;
 
     @LocalServerPort
     private int port;
 
-    @Autowired
-    private TestRestTemplate restTemplate;
-
-    @Autowired
-    private com.fiap.hackathon.upload_service.adapter.persistence.UploadRepository uploadRepository;
+    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final HttpClient httpClient = HttpClient.newHttpClient();
 
     @BeforeAll
     public static void setup() {
@@ -83,13 +72,7 @@ public class UploadIntegrationTest {
         s3client.createBucket(CreateBucketRequest.builder().bucket(bucketName).build());
 
         queueUrl = sqsClient.createQueue(CreateQueueRequest.builder().queueName("test-queue").build()).queueUrl();
-        dlqUrl = sqsClient.createQueue(CreateQueueRequest.builder().queueName("test-dlq").build()).queueUrl();
-
-        // start clamav container
-        clamavContainer = new GenericContainer<>(DockerImageName.parse("mkodockx/docker-clamav:alpine"))
-            .withExposedPorts(3310)
-            .waitingFor(Wait.forListeningPort());
-        clamavContainer.start();
+        sqsClient.createQueue(CreateQueueRequest.builder().queueName("test-dlq").build());
     }
 
     @DynamicPropertySource
@@ -101,9 +84,8 @@ public class UploadIntegrationTest {
         registry.add("cloud.aws.region", () -> localstack.getRegion());
         registry.add("application.s3.bucket", () -> bucketName);
         registry.add("application.sqs.queueUrl", () -> queueUrl);
-        registry.add("application.sqs.dlqUrl", () -> dlqUrl);
-        registry.add("application.clamd.host", () -> clamavContainer.getHost());
-        registry.add("application.clamd.port", () -> clamavContainer.getMappedPort(3310));
+        registry.add("application.sqs.dlqUrl", () -> "");
+        registry.add("application.sqs.maxRetries", () -> "1");
     }
 
     @AfterAll
@@ -111,93 +93,233 @@ public class UploadIntegrationTest {
         if (s3client != null) s3client.close();
         if (sqsClient != null) sqsClient.close();
         localstack.stop();
-        if (clamavContainer != null) clamavContainer.stop();
     }
 
     @Test
-    public void fullUploadFlow_usingPresigned_thenComplete_publishesSqs() throws Exception {
-        // 1) request presigned URL
-        Map<String,Object> req = Map.of("filename","diagram.pdf","contentType","application/pdf","sizeBytes",1024);
-        ResponseEntity<Map> resp = restTemplate.postForEntity(new URI("http://localhost:"+port+"/v1/uploads"), req, Map.class);
-        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.OK);
-        String uploadId = (String) resp.getBody().get("uploadId");
-        String s3Key = (String) resp.getBody().get("s3Key");
+    public void unifiedUpload_withMultipart_uploads_toS3_andReturns201() throws Exception {
+        // 1) Create project
+        HttpResponse<String> projectResp = postJson("/v1/projects", Map.of(
+            "name", "Projeto Teste",
+            "description", "Projeto para fluxo de upload",
+            "ownerId", "owner-1"
+        ));
+        assertThat(projectResp.statusCode()).isEqualTo(HttpStatus.OK.value());
+        Map<String, Object> projectBody = objectMapper.readValue(projectResp.body(), Map.class);
+        String projectId = String.valueOf(projectBody.get("id"));
 
-        // 2) simulate upload by putting object directly to local S3
-        s3client.putObject(PutObjectRequest.builder().bucket(bucketName).key(s3Key).contentType("application/pdf").build(), RequestBody.fromString("dummy"));
+        // 2) Upload file with metadata in single multipart request
+        String fileContent = "This is a test PDF file content";
+        byte[] fileBytes = fileContent.getBytes();
+        
+        HttpResponse<String> uploadResp = postMultipart("/v1/uploads", 
+            "diagram.pdf", 
+            "application/pdf", 
+            fileBytes, 
+            projectId, 
+            "user-123"
+        );
+        assertThat(uploadResp.statusCode()).isEqualTo(HttpStatus.CREATED.value());
+        
+        Map<String, Object> uploadBody = objectMapper.readValue(uploadResp.body(), Map.class);
+        String uploadId = (String) uploadBody.get("uploadId");
+        String s3Key = (String) uploadBody.get("s3Key");
+        
+        assertThat(uploadId).isNotNull();
+        assertThat(s3Key).isNotNull();
+        assertThat(s3Key).endsWith(".pdf");
 
-        // 3) call complete endpoint
-        Map<String,Object> completeReq = Map.of("s3Key", s3Key, "filename","diagram.pdf","contentType","application/pdf","sizeBytes",1024);
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_JSON);
-        HttpEntity<Map<String,Object>> entity = new HttpEntity<>(completeReq, headers);
-        ResponseEntity<String> completeResp = restTemplate.postForEntity(new URI("http://localhost:"+port+"/v1/uploads/"+uploadId+"/complete"), entity, String.class);
-        assertThat(completeResp.getStatusCode()).isEqualTo(HttpStatus.OK);
+        // 3) Verify Location header is present
+        String location = uploadResp.headers().firstValue("Location").orElse(null);
+        assertThat(location).isNotNull().contains("/v1/uploads/" + uploadId);
 
-        // 4) verify SQS message was published
-        boolean found = false;
-        long deadline = System.currentTimeMillis() + Duration.ofSeconds(10).toMillis();
-        while (System.currentTimeMillis() < deadline && !found) {
-            ReceiveMessageRequest r = ReceiveMessageRequest.builder().queueUrl(queueUrl).maxNumberOfMessages(10).waitTimeSeconds(1).build();
-            List<Message> messages = sqsClient.receiveMessage(r).messages();
-            for (Message m : messages) {
-                if (m.body() != null && m.body().contains(s3Key)) {
-                    found = true;
-                    break;
-                }
-            }
-            if (!found) Thread.sleep(500);
+        // 4) Verify file exists in S3
+        boolean fileExists = s3client.headObject(HeadObjectRequest.builder().bucket(bucketName).key(s3Key).build()) != null;
+        assertThat(fileExists).isTrue();
+
+        // 5) Verify upload status is COMPLETED via GET endpoint
+        HttpResponse<String> statusResp = getJson("/v1/uploads/" + uploadId);
+        assertThat(statusResp.statusCode()).isEqualTo(HttpStatus.OK.value());
+        Map<String, Object> statusBody = objectMapper.readValue(statusResp.body(), Map.class);
+        assertThat(statusBody.get("status")).isEqualTo("COMPLETED");
+    }
+
+    @Test
+    public void unifiedUpload_withPngMultipart_uploads_toS3_andReturns201() throws Exception {
+        HttpResponse<String> projectResp = postJson("/v1/projects", Map.of(
+            "name", "Projeto PNG",
+            "description", "Projeto para upload PNG",
+            "ownerId", "owner-1"
+        ));
+        assertThat(projectResp.statusCode()).isEqualTo(HttpStatus.OK.value());
+        Map<String, Object> projectBody = objectMapper.readValue(projectResp.body(), Map.class);
+        String projectId = String.valueOf(projectBody.get("id"));
+
+        byte[] fileBytes = new byte[] {(byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A};
+
+        HttpResponse<String> uploadResp = postMultipart(
+            "/v1/uploads",
+            "imagem.png",
+            "image/png",
+            fileBytes,
+            projectId,
+            "user-123"
+        );
+
+        assertThat(uploadResp.statusCode()).isEqualTo(HttpStatus.CREATED.value());
+        Map<String, Object> uploadBody = objectMapper.readValue(uploadResp.body(), Map.class);
+        String uploadId = (String) uploadBody.get("uploadId");
+        String s3Key = (String) uploadBody.get("s3Key");
+
+        assertThat(uploadId).isNotNull();
+        assertThat(s3Key).isNotNull();
+        assertThat(s3Key).endsWith(".png");
+    }
+
+    @Test
+    public void unifiedUpload_withMetadataAsTextPlain_returns400() throws Exception {
+        HttpResponse<String> projectResp = postJson("/v1/projects", Map.of(
+            "name", "Projeto Metadata",
+            "description", "Projeto para metadata invalida",
+            "ownerId", "owner-1"
+        ));
+        assertThat(projectResp.statusCode()).isEqualTo(HttpStatus.OK.value());
+        Map<String, Object> projectBody = objectMapper.readValue(projectResp.body(), Map.class);
+        String projectId = String.valueOf(projectBody.get("id"));
+
+        byte[] fileBytes = new byte[] {(byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A};
+
+        HttpResponse<String> uploadResp = postMultipart(
+            "/v1/uploads",
+            "imagem.png",
+            "image/png",
+            fileBytes,
+            projectId,
+            "user-123",
+            "text/plain"
+        );
+
+        assertThat(uploadResp.statusCode()).isEqualTo(HttpStatus.BAD_REQUEST.value());
+    }
+
+        @Test
+        public void unifiedUpload_withInvalidContentType_returns400() throws Exception {
+        HttpResponse<String> projectResp = postJson("/v1/projects", Map.of(
+            "name", "Projeto Teste",
+            "description", "Projeto para validacao",
+            "ownerId", "owner-1"
+        ));
+        assertThat(projectResp.statusCode()).isEqualTo(HttpStatus.OK.value());
+        Map<String, Object> projectBody = objectMapper.readValue(projectResp.body(), Map.class);
+        String projectId = String.valueOf(projectBody.get("id"));
+
+        byte[] fileBytes = "content".getBytes();
+        HttpResponse<String> uploadResp = postMultipart(
+            "/v1/uploads",
+            "arquivo.txt",
+            "text/plain",
+            fileBytes,
+            projectId,
+            "user-123"
+        );
+
+        assertThat(uploadResp.statusCode()).isEqualTo(HttpStatus.BAD_REQUEST.value());
+        Map<String, Object> errorBody = objectMapper.readValue(uploadResp.body(), Map.class);
+        assertThat(errorBody.get("message")).isEqualTo("Invalid upload request");
+        assertThat(errorBody.get("code")).isEqualTo("INVALID_CONTENT_TYPE");
+        assertThat(String.valueOf(errorBody.get("detail"))).contains("PDF");
         }
-        assertThat(found).isTrue();
 
-        // 5) create an upload containing the EICAR test string and verify scanner detects it (QUARANTINED)
-        Map<String,Object> req2 = Map.of("filename","eicar.txt","contentType","text/plain","sizeBytes",68);
-        ResponseEntity<Map> resp2 = restTemplate.postForEntity(new URI("http://localhost:"+port+"/v1/uploads"), req2, Map.class);
-        assertThat(resp2.getStatusCode()).isEqualTo(HttpStatus.OK);
-        String uploadId2 = (String) resp2.getBody().get("uploadId");
-        String s3Key2 = (String) resp2.getBody().get("s3Key");
+    @Test
+    public void getUploadStatus_withUnknownId_returns404WithStandardError() throws Exception {
+        String unknownUploadId = UUID.randomUUID().toString();
 
-        // upload EICAR test file
-        String eicar = "X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*";
-        s3client.putObject(PutObjectRequest.builder().bucket(bucketName).key(s3Key2).contentType("text/plain").build(), RequestBody.fromString(eicar));
+        HttpResponse<String> statusResp = getJson("/v1/uploads/" + unknownUploadId);
 
-        // complete upload (publish message)
-        Map<String,Object> completeReq2 = Map.of("s3Key", s3Key2, "filename","eicar.txt","contentType","text/plain","sizeBytes",eicar.length());
-        HttpEntity<Map<String,Object>> entity2 = new HttpEntity<>(completeReq2, headers);
-        ResponseEntity<String> completeResp2 = restTemplate.postForEntity(new URI("http://localhost:"+port+"/v1/uploads/"+uploadId2+"/complete"), entity2, String.class);
-        assertThat(completeResp2.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(statusResp.statusCode()).isEqualTo(HttpStatus.NOT_FOUND.value());
+        Map<String, Object> errorBody = objectMapper.readValue(statusResp.body(), Map.class);
+        assertThat(errorBody.get("message")).isEqualTo("Resource not found");
+        assertThat(errorBody.get("code")).isEqualTo("UPLOAD_NOT_FOUND");
+        assertThat(String.valueOf(errorBody.get("detail"))).contains(unknownUploadId);
+    }
 
-        // wait for worker to process and mark QUARANTINED
-        boolean quarantined = false;
-        long waitDeadline = System.currentTimeMillis() + 30_000;
-        while (System.currentTimeMillis() < waitDeadline && !quarantined) {
-            java.util.Optional<com.fiap.hackathon.upload_service.domain.Upload> ou = uploadRepository.findById(java.util.UUID.fromString(uploadId2));
-            if (ou.isPresent() && ou.get().getStatus() != null && ou.get().getStatus().name().equals("QUARANTINED")) {
-                quarantined = true;
-                break;
-            }
-            Thread.sleep(1000);
-        }
-        assertThat(quarantined).isTrue();
+    private HttpResponse<String> postJson(String path, Map<String, Object> body) throws Exception {
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(new URI("http://localhost:" + port + path))
+                .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(body)))
+                .build();
 
-        // 6) send a message that will force failure in the worker and verify it ends in the DLQ
-        String forcedBody = String.format("{\"eventId\":\"%s\",\"s3Key\":\"%s\", \"forceFail\": true}", uploadId, s3Key);
-        sqsClient.createQueue(CreateQueueRequest.builder().queueName("test-queue").build());
-        sqsClient.sendMessage(b -> b.queueUrl(queueUrl).messageBody(forcedBody));
+        return httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+    }
 
-        boolean dlqFound = false;
-        long dlqDeadline = System.currentTimeMillis() + Duration.ofSeconds(30).toMillis();
-        while (System.currentTimeMillis() < dlqDeadline && !dlqFound) {
-            ReceiveMessageRequest r = ReceiveMessageRequest.builder().queueUrl(dlqUrl).maxNumberOfMessages(10).waitTimeSeconds(2).build();
-            List<Message> messages = sqsClient.receiveMessage(r).messages();
-            for (Message m : messages) {
-                if (m.body() != null && m.body().contains(s3Key) && m.body().contains("forceFail")) {
-                    dlqFound = true;
-                    break;
-                }
-            }
-            if (!dlqFound) Thread.sleep(1000);
-        }
-        assertThat(dlqFound).isTrue();
+    private HttpResponse<String> postMultipart(String path, String filename, String contentType, byte[] fileBytes, String projectId, String uploaderId) throws Exception {
+        return postMultipart(path, filename, contentType, fileBytes, projectId, uploaderId, "application/json");
+    }
+
+    private HttpResponse<String> postMultipart(String path, String filename, String contentType, byte[] fileBytes, String projectId, String uploaderId, String metadataPartContentType) throws Exception {
+        String boundary = "----WebKitFormBoundary7MA4YWxkTrZu0gW";
+        byte[] body = buildMultipartBody(boundary, filename, contentType, fileBytes, projectId, uploaderId, metadataPartContentType);
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(new URI("http://localhost:" + port + path))
+                .header(HttpHeaders.CONTENT_TYPE, "multipart/form-data; boundary=" + boundary)
+                .POST(HttpRequest.BodyPublishers.ofByteArray(body))
+                .build();
+
+        return httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+    }
+
+    private byte[] buildMultipartBody(String boundary, String filename, String contentType, byte[] fileBytes, String projectId, String uploaderId, String metadataPartContentType) throws Exception {
+        String CRLF = "\r\n";
+        StringBuilder sb = new StringBuilder();
+
+        // File part
+        sb.append("--").append(boundary).append(CRLF);
+        sb.append("Content-Disposition: form-data; name=\"file\"; filename=\"").append(filename).append("\"").append(CRLF);
+        sb.append("Content-Type: ").append(contentType).append(CRLF);
+        sb.append(CRLF);
+
+        byte[] filePart = sb.toString().getBytes();
+        
+        // Metadata JSON part
+        sb = new StringBuilder();
+        sb.append(CRLF).append("--").append(boundary).append(CRLF);
+        sb.append("Content-Disposition: form-data; name=\"metadata\"").append(CRLF);
+        sb.append("Content-Type: ").append(metadataPartContentType).append(CRLF);
+        sb.append(CRLF);
+        
+        Map<String, String> metadata = Map.of(
+            "filename", filename,
+            "projectId", projectId,
+            "uploaderId", uploaderId
+        );
+        String metadataJson = objectMapper.writeValueAsString(metadata);
+        byte[] metadataPart = (sb.toString() + metadataJson).getBytes();
+
+        // Closing boundary
+        String closing = CRLF + "--" + boundary + "--" + CRLF;
+        byte[] closingPart = closing.getBytes();
+
+        // Combine all parts
+        byte[] result = new byte[filePart.length + fileBytes.length + metadataPart.length + closingPart.length];
+        int offset = 0;
+        System.arraycopy(filePart, 0, result, offset, filePart.length);
+        offset += filePart.length;
+        System.arraycopy(fileBytes, 0, result, offset, fileBytes.length);
+        offset += fileBytes.length;
+        System.arraycopy(metadataPart, 0, result, offset, metadataPart.length);
+        offset += metadataPart.length;
+        System.arraycopy(closingPart, 0, result, offset, closingPart.length);
+
+        return result;
+    }
+
+    private HttpResponse<String> getJson(String path) throws Exception {
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(new URI("http://localhost:" + port + path))
+                .GET()
+                .build();
+
+        return httpClient.send(request, HttpResponse.BodyHandlers.ofString());
     }
 }

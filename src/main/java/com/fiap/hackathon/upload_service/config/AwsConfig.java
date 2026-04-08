@@ -14,7 +14,7 @@ import java.net.URI;
 @Configuration
 public class AwsConfig {
 
-    @Value("${cloud.aws.region:us-east-1}")
+    @Value("${cloud.aws.region:us-east-2}")
     private String region;
 
     @Value("${cloud.aws.endpoint.s3:}")

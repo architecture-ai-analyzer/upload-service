@@ -24,3 +24,12 @@ hs_err_pid*
 replay_pid*
 
 target/
+
+# Environment files
+.env
+.env.local
+.env.dev
+.env.homologation
+.env.prod
+!.env.example
+!.env.local.example

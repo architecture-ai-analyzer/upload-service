@@ -1,23 +1,29 @@
 package com.fiap.hackathon.upload_service.adapter.dto;
 
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
+import org.springframework.web.multipart.MultipartFile;
 
 public class UploadRequest {
+
+    private MultipartFile file;
 
     @NotBlank
     private String filename;
 
     @NotBlank
-    private String contentType;
-
-    @NotNull
-    private Long sizeBytes;
-
-    @NotBlank
     private String projectId;
 
+    @NotBlank
     private String uploaderId;
+
+    
+    public MultipartFile getFile() {
+        return file;
+    }
+
+    public void setFile(MultipartFile file) {
+        this.file = file;
+    }
 
     public String getFilename() {
         return filename;
@@ -25,22 +31,6 @@ public class UploadRequest {
 
     public void setFilename(String filename) {
         this.filename = filename;
-    }
-
-    public String getContentType() {
-        return contentType;
-    }
-
-    public void setContentType(String contentType) {
-        this.contentType = contentType;
-    }
-
-    public Long getSizeBytes() {
-        return sizeBytes;
-    }
-
-    public void setSizeBytes(Long sizeBytes) {
-        this.sizeBytes = sizeBytes;
     }
 
     public String getUploaderId() {

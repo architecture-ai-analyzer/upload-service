@@ -63,6 +63,10 @@ public class UploadService {
         return up;
     }
 
+    public Optional<Upload> getUpload(UUID uploadId) {
+        return uploadRepository.findById(uploadId);
+    }
+
     static class UploadEvent {
         public String eventId;
         public String s3Key;

@@ -10,25 +10,17 @@ services:
     volumes:
       - localstack_data:/tmp/localstack
 
-  clamav:
-    image: mkodockx/docker-clamav:alpine
-    ports:
-      - "3310:3310"
-
   app:
     build: .
     depends_on:
-      - localstack
-      - clamav
+      localstack:
+        condition: service_started
     ports:
       - "8080:8080"
+    env_file:
+      - envs/.env.local
     environment:
-      - AWS_ENDPOINT=http://localstack:4566
-      - AWS_REGION=us-east-1
-      - AWS_ACCESS_KEY_ID=test
-      - AWS_SECRET_ACCESS_KEY=test
-      - APPLICATION_SQS_QUEUEURL=
-      - APPLICATION_SQS_DLQURL=
+      - SPRING_PROFILES_ACTIVE=dev
     restart: on-failure
 
   setup:

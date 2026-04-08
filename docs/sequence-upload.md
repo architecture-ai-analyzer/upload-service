@@ -1,87 +1,169 @@
 # Fluxo de Cadastro e Processamento de Uploads
 
-Este documento descreve o fluxo de cadastro de um `Project` e o fluxo de upload/análise de arquivos (PDF/imagem) implementado no serviço.
+Este documento descreve o fluxo atual de cadastro de `Project` e de upload/processamento de arquivos no formato unificado.
 
 ## Endpoints principais
 
-- `POST /v1/projects` — cria um `Project` (controlador: `ProjectController`).
-- `POST /v1/uploads` — inicia um upload gerando `uploadId` e `s3Key` (use-case: `CreateUploadUseCase`).
-- `POST /v1/uploads/{uploadId}/complete` — marca upload como completo; salva metadados em `Upload` e publica evento em SQS (service: `UploadService`).
+- `POST /v1/projects` - cria um `Project`.
+- `POST /v1/uploads` - endpoint unico de upload (multipart) com arquivo + metadados.
+- `GET /v1/uploads/{uploadId}` - consulta status do upload.
+
+## Contrato do endpoint de upload
+
+`POST /v1/uploads`
+
+`Content-Type: multipart/form-data`
+
+Partes obrigatorias:
+
+- `file` (binario)
+- `metadata` (JSON)
+
+Exemplo de `metadata`:
+
+```json
+{
+  "filename": "resultado.pdf",
+  "contentType": "application/pdf",
+  "projectId": "11111111-1111-1111-1111-111111111111",
+  "uploaderId": "user-123"
+}
+```
+
+Resposta de sucesso (`201 Created`):
+
+```json
+{
+  "uploadId": "a9a92228-5463-4722-aa39-cb495a52c030",
+  "presignedUrl": null,
+  "s3Key": "uploads/dev/11111111-1111-1111-1111-111111111111/2026-04-03/user-123/a9a92228-5463-4722-aa39-cb495a52c030.pdf",
+  "expiresInSeconds": 0
+}
+```
+
+## Regras de validacao
+
+- Tipos aceitos: `application/pdf`, `image/png`, `image/jpg`, `image/jpeg`
+- O `contentType` do `metadata` deve ser igual ao `contentType` do arquivo enviado
+- Tamanho maximo do arquivo: `1GB`
+
+Configuracao relevante:
+
+- `spring.servlet.multipart.max-file-size=1GB`
+- `spring.servlet.multipart.max-request-size=1GB`
+
+## Respostas de erro padronizadas
+
+Todos os erros de validacao/not found seguem o formato:
+
+```json
+{
+  "message": "...",
+  "code": "...",
+  "detail": "..."
+}
+```
+
+Exemplos:
+
+Content-Type invalido (`400`):
+
+```json
+{
+  "message": "Invalid upload request",
+  "code": "INVALID_CONTENT_TYPE",
+  "detail": "Only PDF, PNG, JPG or JPEG files are allowed"
+}
+```
+
+Arquivo acima de 1GB (`400`):
+
+```json
+{
+  "message": "Invalid upload request",
+  "code": "FILE_SIZE_EXCEEDED",
+  "detail": "File size exceeds maximum allowed size of 1GB"
+}
+```
+
+Upload nao encontrado (`404`):
+
+```json
+{
+  "message": "Resource not found",
+  "code": "UPLOAD_NOT_FOUND",
+  "detail": "Upload not found for id <uuid>"
+}
+```
 
 ## Resumo do fluxo
 
 1. Cliente cria um projeto com `POST /v1/projects`.
-2. Cliente solicita a criação de um upload com `POST /v1/uploads`, enviando `projectId` e metadados.
-3. `CreateUploadUseCase` gera `uploadId` e `s3Key` (caminho onde o cliente deve enviar o arquivo para o S3).
-4. Cliente envia o arquivo diretamente para S3 (fluxo externo ao serviço) usando o `s3Key` retornado.
-5. Cliente chama `POST /v1/uploads/{uploadId}/complete` com `s3Key`, `filename`, `contentType`, `sizeBytes` e `projectId`.
-6. `UploadService.completeUpload` grava/atualiza a entidade `Upload` (incluindo `projectId`) com status `COMPLETED` e publica um `UploadEvent` na fila SQS (campo `eventId` contém `uploadId`).
-7. O `ScanWorker` (consumidor SQS) faz poll na fila, verifica idempotência, baixa o objeto do S3 e chama o `VirusScanner` (ClamAV) para análise.
-8. Dependendo do resultado do scanner, o `Upload` é atualizado para `SCANNED_OK` ou `QUARANTINED`. A mensagem SQS é deletada e o processamento marcado.
-9. Em caso de falhas repetidas, após `maxRetries` o `ScanWorker` encaminha a mensagem para a DLQ e marca como processada.
+2. Cliente envia arquivo e metadados no `POST /v1/uploads` (multipart).
+3. `UploadController` valida arquivo, tipo e tamanho.
+4. `SingleUploadUseCase` gera `uploadId` e `s3Key`, envia o arquivo ao S3, salva `Upload` com status `COMPLETED` e publica evento no SQS.
+5. `ScanWorker` consome evento, verifica idempotencia e valida disponibilidade do arquivo no S3.
+6. Em sucesso, status do upload passa para `SCANNED_OK`.
+7. Em falhas repetidas, a mensagem e enviada para a DLQ conforme `maxRetries`.
 
-## Diagrama de Sequência (PlantUML)
+## Diagrama de Sequencia (PlantUML)
 
 ```plantuml
 @startuml
 actor Client
 participant "ProjectController" as PC
-participant "CreateUploadUseCase" as CU
-participant "S3 (external)" as S3
-participant "UploadController / UploadService" as US
+participant "UploadController" as UC
+participant "SingleUploadUseCase" as SU
+participant "S3" as S3
+participant "DB (Upload/Project)" as DB
 participant "SQS (queue)" as SQS
 participant "ScanWorker" as SW
-participant "VirusScanner (ClamAV)" as VS
-participant "DB (Upload/Project)" as DB
 
 Client -> PC: POST /v1/projects {name, ownerId}
 PC -> DB: save Project
 DB --> PC: Project{id}
-PC --> Client: 201 Created (ProjectResponse)
+PC --> Client: 200 OK
 
-Client -> CU: POST /v1/uploads {filename, contentType, sizeBytes, uploaderId, projectId}
-CU --> Client: UploadResponse {uploadId, s3Key}
+Client -> UC: POST /v1/uploads (multipart)
+note right
+parts:
+- file (binary)
+- metadata JSON
+end note
 
-Client -> S3: PUT object at s3Key
-S3 --> Client: 200 OK
+UC -> UC: valida file/contentType/tamanho
+UC -> SU: execute(metadata + file)
+SU -> S3: PutObject
+S3 --> SU: ETag
+SU -> DB: save Upload(status=COMPLETED)
+DB --> SU: Upload saved
+SU -> SQS: send UploadEvent(eventId=uploadId,...)
+SQS --> SU: SendMessageResult
+SU --> UC: UploadResponse
+UC --> Client: 201 Created
 
-Client -> US: POST /v1/uploads/{uploadId}/complete {s3Key, filename, sizeBytes, projectId}
-US -> DB: upsert Upload (set status=COMPLETED, projectId)
-DB --> US: Upload saved
-US -> SQS: send UploadEvent {eventId=uploadId, s3Key, projectId, ...}
-SQS --> US: SendMessageResult
-US --> Client: 200 OK (Upload)
-
-== Assíncrono: Worker consome SQS ==
+== Assincrono: Worker consome SQS ==
 SW -> SQS: ReceiveMessage
 SQS --> SW: Message{body}
 SW -> SW: idempotency check (ProcessedMessage)
 SW -> S3: GetObject(s3Key)
 S3 --> SW: object stream
-SW -> VS: scan(stream)
-VS --> SW: ScanResult{infected?}
-SW -> DB: update Upload status (SCANNED_OK | QUARANTINED)
+SW -> DB: update Upload status (SCANNED_OK)
 DB --> SW: OK
 SW -> SQS: DeleteMessage
 SQS --> SW: OK
 
 alt processing failure and receiveCount >= maxRetries
-    SW -> SQS: SendMessage(DLQ)
-    SQS --> SW: OK
-    SW -> SQS: DeleteMessage(original)
+        SW -> SQS: SendMessage(DLQ)
+        SQS --> SW: OK
+        SW -> SQS: DeleteMessage(original)
 end
 
 @enduml
 ```
 
-## Observações técnicas
+## Referencias
 
-- O `uploadId` é usado como `eventId` na mensagem SQS para rastreabilidade e para que o `ScanWorker` possa atualizar o registro em `uploads`.
-- O `projectId` é propagado e armazenado no `Upload`, permitindo associar múltiplos arquivos a um mesmo projeto.
-- O serviço assume que o cliente fará o upload para o S3 usando o `s3Key` retornado; a geração de presigned URLs foi removida do fluxo atual.
-- Idempotência do consumidor é feita via a tabela `processed_messages` (`ProcessedMessageRepository`).
-- Em caso de erro permanente, mensagens são encaminhadas para a DLQ configurada (campo `application.sqs.dlqUrl`).
-
----
-
-Arquivo gerado: `docs/sequence-upload.md`
+- Swagger UI: `/swagger-ui.html`
+- OpenAPI JSON: `/v3/api-docs`
+- Collection Postman local: `docs/postman/upload-service.postman_collection.json`

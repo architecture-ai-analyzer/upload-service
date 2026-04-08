@@ -1,0 +1,65 @@
+{
+  "family": "upload-service",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "1024",
+  "memory": "2048",
+  "taskRoleArn": "arn:aws:iam::${AWS_ACCOUNT_ID}:role/upload-service-task-role",
+  "executionRoleArn": "arn:aws:iam::${AWS_ACCOUNT_ID}:role/upload-service-execution-role",
+  "containerDefinitions": [
+    {
+      "name": "upload-service",
+      "image": "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/upload-service:${IMAGE_TAG}",
+      "essential": true,
+      "portMappings": [{ "containerPort": 8080, "protocol": "tcp" }],
+      "environment": [
+        { "name": "SPRING_PROFILES_ACTIVE", "value": "prod" },
+        { "name": "CLOUD_AWS_REGION", "value": "${AWS_REGION}" }
+      ],
+      "secrets": [
+        {
+          "name": "SPRING_DATASOURCE_URL",
+          "valueFrom": "arn:aws:ssm:${AWS_REGION}:${AWS_ACCOUNT_ID}:parameter/upload-service/prod/SPRING_DATASOURCE_URL"
+        },
+        {
+          "name": "SPRING_DATASOURCE_USERNAME",
+          "valueFrom": "arn:aws:ssm:${AWS_REGION}:${AWS_ACCOUNT_ID}:parameter/upload-service/prod/SPRING_DATASOURCE_USERNAME"
+        },
+        {
+          "name": "SPRING_DATASOURCE_PASSWORD",
+          "valueFrom": "arn:aws:ssm:${AWS_REGION}:${AWS_ACCOUNT_ID}:parameter/upload-service/prod/SPRING_DATASOURCE_PASSWORD"
+        },
+        {
+          "name": "APPLICATION_S3_BUCKET",
+          "valueFrom": "arn:aws:ssm:${AWS_REGION}:${AWS_ACCOUNT_ID}:parameter/upload-service/prod/APPLICATION_S3_BUCKET"
+        },
+        {
+          "name": "APPLICATION_SQS_QUEUE_URL",
+          "valueFrom": "arn:aws:ssm:${AWS_REGION}:${AWS_ACCOUNT_ID}:parameter/upload-service/prod/APPLICATION_SQS_QUEUE_URL"
+        },
+        {
+          "name": "APPLICATION_SQS_DLQ_URL",
+          "valueFrom": "arn:aws:ssm:${AWS_REGION}:${AWS_ACCOUNT_ID}:parameter/upload-service/prod/APPLICATION_SQS_DLQ_URL"
+        }
+      ],
+      "healthCheck": {
+        "command": [
+          "CMD-SHELL",
+          "curl -sf http://localhost:8080/actuator/health/liveness || exit 1"
+        ],
+        "interval": 30,
+        "timeout": 10,
+        "retries": 3,
+        "startPeriod": 60
+      },
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/upload-service/app",
+          "awslogs-region": "${AWS_REGION}",
+          "awslogs-stream-prefix": "upload-service"
+        }
+      }
+    }
+  ]
+}
