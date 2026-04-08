@@ -16,6 +16,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -28,6 +29,13 @@ public class SingleUploadUseCase {
             "image/png",
             "image/jpg",
             "image/jpeg"
+    );
+
+    private static final Map<String, Set<String>> CONTENT_TYPE_TO_EXTENSIONS = Map.of(
+            "application/pdf", Set.of("pdf"),
+            "image/png", Set.of("png"),
+            "image/jpg", Set.of("jpg"),
+            "image/jpeg", Set.of("jpg", "jpeg")
     );
 
     private final S3ClientWrapper s3ClientWrapper;
@@ -65,11 +73,15 @@ public class SingleUploadUseCase {
             throw new IllegalArgumentException("Unsupported content type");
         }
 
+        String filename = request.getFilename();
+        String ext = extractFileExtension(filename);
+        if (!isExtensionAllowedForContentType(ext, fileContentType)) {
+            throw new IllegalArgumentException("File extension does not match content type");
+        }
+
         // Generate upload metadata
         UUID uploadId = UUID.randomUUID();
-        String ext = extractFileExtension(request.getFilename());
-        String date = LocalDate.now().toString();
-        String s3Key = generateS3Key(request.getProjectId(), date, request.getUploaderId(), uploadId, ext);
+        String s3Key = generateS3Key(request.getProjectId(), request.getUploaderId(), uploadId, ext);
         
         // Upload file to S3 synchronously
         long fileSize = file.getSize();
@@ -127,16 +139,24 @@ public class SingleUploadUseCase {
 
     private String extractFileExtension(String filename) {
         if (filename != null && filename.contains(".")) {
-            return filename.substring(filename.lastIndexOf('.') + 1);
+            return filename.substring(filename.lastIndexOf('.') + 1).toLowerCase();
         }
-        return "bin";
+        return "";
     }
 
-    private String generateS3Key(String projectId, String date, String uploaderId, UUID uploadId, String ext) {
+    private boolean isExtensionAllowedForContentType(String extension, String contentType) {
+        if (extension == null || extension.isBlank() || contentType == null || contentType.isBlank()) {
+            return false;
+        }
+        Set<String> allowedExtensions = CONTENT_TYPE_TO_EXTENSIONS.get(contentType.toLowerCase());
+        return allowedExtensions != null && allowedExtensions.contains(extension.toLowerCase());
+    }
+
+    private String generateS3Key(String projectId, String uploaderId, UUID uploadId, String ext) {
         String proj = projectId == null || projectId.isBlank() ? "no-project" : projectId;
         String user = uploaderId == null || uploaderId.isBlank() ? "unknown" : uploaderId;
         String bucketPrefix = (bucketName == null || bucketName.isBlank()) ? "upload" : bucketName;
-        return String.format("upload/%s/%s/%s/%s/%s.%s", bucketPrefix, proj, date, user, uploadId, ext);
+        return String.format("%s/projects/%s/%s/%s.%s", bucketPrefix, proj, user, uploadId, ext);
     }
 
     static class UploadEvent {

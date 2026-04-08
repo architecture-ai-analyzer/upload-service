@@ -9,8 +9,8 @@
     { "key": "projectId", "value": "" },
     { "key": "uploadId", "value": "" },
     { "key": "s3Key", "value": "" },
-    { "key": "filename", "value": "resultado.pdf" },
-    { "key": "fileContentType", "value": "application/pdf" },
+    { "key": "filename", "value": "" },
+    { "key": "fileContentType", "value": "" },
     { "key": "uploaderId", "value": "user-123" }
   ],
   "item": [
@@ -58,7 +58,6 @@
             {
               "key": "file",
               "type": "file",
-              "contentType": "{{fileContentType}}",
               "src": ""
             },
             {
@@ -76,6 +75,35 @@
         }
       },
       "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "var body = pm.request.body;",
+              "var filename = pm.collectionVariables.get('filename') || '';",
+              "var fileContentType = pm.collectionVariables.get('fileContentType') || '';",
+              "if (body && body.mode === 'formdata') {",
+              "  var fileItem = undefined;",
+              "  if (Array.isArray(body.formdata)) {",
+              "    fileItem = body.formdata.find(function(item) { return item.key === 'file'; });",
+              "  } else if (body.formdata && typeof body.formdata.all === 'function') {",
+              "    fileItem = body.formdata.all().find(function(item) { return item.key === 'file'; });",
+              "  }",
+              "  if (fileItem) {",
+              "    if (!fileContentType && fileItem.contentType) {",
+              "      fileContentType = fileItem.contentType;",
+              "    }",
+              "    if (fileItem.src) {",
+              "      filename = fileItem.src.replace(/^.*[\\\\/]/, '');",
+              "    }",
+              "  }",
+              "}",
+              "if (filename) pm.collectionVariables.set('filename', filename);",
+              "if (fileContentType) pm.collectionVariables.set('fileContentType', fileContentType);"
+            ]
+          }
+        },
         {
           "listen": "test",
           "script": {

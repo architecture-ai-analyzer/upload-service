@@ -230,6 +230,34 @@ public class UploadIntegrationTest {
         }
 
     @Test
+    public void unifiedUpload_withMismatchedFilenameExtension_returns400() throws Exception {
+        HttpResponse<String> projectResp = postJson("/v1/projects", Map.of(
+            "name", "Projeto Teste",
+            "description", "Projeto para validacao de extensao",
+            "ownerId", "owner-1"
+        ));
+        assertThat(projectResp.statusCode()).isEqualTo(HttpStatus.OK.value());
+        Map<String, Object> projectBody = objectMapper.readValue(projectResp.body(), Map.class);
+        String projectId = String.valueOf(projectBody.get("id"));
+
+        byte[] fileBytes = new byte[] {(byte) 0x89, 0x50, 0x4E, 0x47};
+        HttpResponse<String> uploadResp = postMultipart(
+            "/v1/uploads",
+            "imagem.pdf",
+            "image/png",
+            fileBytes,
+            projectId,
+            "user-123"
+        );
+
+        assertThat(uploadResp.statusCode()).isEqualTo(HttpStatus.BAD_REQUEST.value());
+        Map<String, Object> errorBody = objectMapper.readValue(uploadResp.body(), Map.class);
+        assertThat(errorBody.get("message")).isEqualTo("Invalid request");
+        assertThat(errorBody.get("code")).isEqualTo("BAD_REQUEST");
+        assertThat(String.valueOf(errorBody.get("detail"))).contains("extension");
+    }
+
+    @Test
     public void getUploadStatus_withUnknownId_returns404WithStandardError() throws Exception {
         String unknownUploadId = UUID.randomUUID().toString();
 
