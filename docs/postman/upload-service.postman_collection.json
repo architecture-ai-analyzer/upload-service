@@ -1,0 +1,157 @@
+{
+  "info": {
+    "name": "Upload Service - Local",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Fluxo unificado: criar projeto, enviar arquivo com metadata multipart e consultar status."
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8080" },
+    { "key": "projectId", "value": "" },
+    { "key": "uploadId", "value": "" },
+    { "key": "s3Key", "value": "" },
+    { "key": "filename", "value": "" },
+    { "key": "fileContentType", "value": "" },
+    { "key": "uploaderId", "value": "user-123" }
+  ],
+  "item": [
+    {
+      "name": "1 - Criar Projeto",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Projeto Laudo Seguranca\",\n  \"description\": \"Upload de exames em PDF\",\n  \"ownerId\": \"{{uploaderId}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/v1/projects",
+          "host": ["{{baseUrl}}"],
+          "path": ["v1", "projects"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "var json = pm.response.json();",
+              "if (json && json.id) {",
+              "  pm.collectionVariables.set('projectId', json.id);",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "2 - Upload de Arquivo",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "file",
+              "type": "file",
+              "src": ""
+            },
+            {
+              "key": "metadata",
+              "type": "text",
+              "contentType": "application/json",
+              "value": "{\"filename\":\"{{filename}}\",\"projectId\":\"{{projectId}}\",\"uploaderId\":\"{{uploaderId}}\"}"
+            }
+          ]
+        },
+        "url": {
+          "raw": "{{baseUrl}}/v1/uploads",
+          "host": ["{{baseUrl}}"],
+          "path": ["v1", "uploads"]
+        }
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "var body = pm.request.body;",
+              "var filename = pm.collectionVariables.get('filename') || '';",
+              "var fileContentType = pm.collectionVariables.get('fileContentType') || '';",
+              "if (body && body.mode === 'formdata') {",
+              "  var fileItem = undefined;",
+              "  if (Array.isArray(body.formdata)) {",
+              "    fileItem = body.formdata.find(function(item) { return item.key === 'file'; });",
+              "  } else if (body.formdata && typeof body.formdata.all === 'function') {",
+              "    fileItem = body.formdata.all().find(function(item) { return item.key === 'file'; });",
+              "  }",
+              "  if (fileItem) {",
+              "    if (!fileContentType && fileItem.contentType) {",
+              "      fileContentType = fileItem.contentType;",
+              "    }",
+              "    if (fileItem.src) {",
+              "      filename = fileItem.src.replace(/^.*[\\\\/]/, '');",
+              "    }",
+              "  }",
+              "}",
+              "if (filename) pm.collectionVariables.set('filename', filename);",
+              "if (fileContentType) pm.collectionVariables.set('fileContentType', fileContentType);"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status 201 Created', function () {",
+              "  pm.response.to.have.status(201);",
+              "});",
+              "var json = pm.response.json();",
+              "if (json && json.uploadId) {",
+              "  pm.collectionVariables.set('uploadId', json.uploadId);",
+              "}",
+              "if (json && json.s3Key) {",
+              "  pm.collectionVariables.set('s3Key', json.s3Key);",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "3 - Consultar Upload",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/v1/uploads/{{uploadId}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["v1", "uploads", "{{uploadId}}"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "var json = pm.response.json();",
+              "pm.test('Tem status', function () {",
+              "  pm.expect(json.status).to.exist;",
+              "});"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
