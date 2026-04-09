@@ -20,8 +20,4 @@ public class SqsClientWrapper {
                 .build();
         sqsClient.sendMessage(req);
     }
-
-    public void sendMessageToDlq(String dlqUrl, String messageBody) {
-        sendMessage(dlqUrl, messageBody);
-    }
 }

@@ -36,10 +36,6 @@
         {
           "name": "APPLICATION_SQS_QUEUE_URL",
           "valueFrom": "arn:aws:ssm:${AWS_REGION}:${AWS_ACCOUNT_ID}:parameter/upload-service/prod/APPLICATION_SQS_QUEUE_URL"
-        },
-        {
-          "name": "APPLICATION_SQS_DLQ_URL",
-          "valueFrom": "arn:aws:ssm:${AWS_REGION}:${AWS_ACCOUNT_ID}:parameter/upload-service/prod/APPLICATION_SQS_DLQ_URL"
         }
       ],
       "healthCheck": {

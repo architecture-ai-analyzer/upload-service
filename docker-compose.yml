@@ -5,7 +5,7 @@ services:
       - "4566:4566"
     environment:
       - SERVICES=s3,sqs
-      - DEFAULT_REGION=us-east-1
+      - DEFAULT_REGION=us-east-2
       - DATA_DIR=/tmp/localstack/data
     volumes:
       - localstack_data:/tmp/localstack
@@ -32,7 +32,6 @@ services:
       "sleep 5;
        awslocal s3 mb s3://upload-bucket || true;
        awslocal sqs create-queue --queue-name upload-queue || true;
-       awslocal sqs create-queue --queue-name upload-dlq || true;
        echo 'resources created';"
     environment:
       - SERVICES=s3,sqs

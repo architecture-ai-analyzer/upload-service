@@ -102,9 +102,7 @@ Upload nao encontrado (`404`):
 2. Cliente envia arquivo e metadados no `POST /v1/uploads` (multipart).
 3. `UploadController` valida arquivo, tipo e tamanho.
 4. `SingleUploadUseCase` gera `uploadId` e `s3Key`, envia o arquivo ao S3, salva `Upload` com status `COMPLETED` e publica evento no SQS.
-5. `ScanWorker` consome evento, verifica idempotencia e valida disponibilidade do arquivo no S3.
-6. Em sucesso, status do upload passa para `SCANNED_OK`.
-7. Em falhas repetidas, a mensagem e enviada para a DLQ conforme `maxRetries`.
+5. A mensagem fica disponivel na `upload-queue` para consumo por um servico externo.
 
 ## Diagrama de Sequencia (PlantUML)
 
@@ -117,7 +115,7 @@ participant "SingleUploadUseCase" as SU
 participant "S3" as S3
 participant "DB (Upload/Project)" as DB
 participant "SQS (queue)" as SQS
-participant "ScanWorker" as SW
+participant "External Consumer" as EC
 
 Client -> PC: POST /v1/projects {name, ownerId}
 PC -> DB: save Project
@@ -142,22 +140,13 @@ SQS --> SU: SendMessageResult
 SU --> UC: UploadResponse
 UC --> Client: 201 Created
 
-== Assincrono: Worker consome SQS ==
-SW -> SQS: ReceiveMessage
-SQS --> SW: Message{body}
-SW -> SW: idempotency check (ProcessedMessage)
-SW -> S3: GetObject(s3Key)
-S3 --> SW: object stream
-SW -> DB: update Upload status (SCANNED_OK)
-DB --> SW: OK
-SW -> SQS: DeleteMessage
-SQS --> SW: OK
-
-alt processing failure and receiveCount >= maxRetries
-        SW -> SQS: SendMessage(DLQ)
-        SQS --> SW: OK
-        SW -> SQS: DeleteMessage(original)
-end
+== Assincrono: Consumo externo ==
+EC -> SQS: ReceiveMessage
+SQS --> EC: Message{body}
+note right of EC
+Processamento e tratamento de erro
+sao responsabilidade do servico externo.
+end note
 
 @enduml
 ```

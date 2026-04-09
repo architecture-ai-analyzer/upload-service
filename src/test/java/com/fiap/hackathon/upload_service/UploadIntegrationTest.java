@@ -72,7 +72,6 @@ public class UploadIntegrationTest {
         s3client.createBucket(CreateBucketRequest.builder().bucket(bucketName).build());
 
         queueUrl = sqsClient.createQueue(CreateQueueRequest.builder().queueName("test-queue").build()).queueUrl();
-        sqsClient.createQueue(CreateQueueRequest.builder().queueName("test-dlq").build());
     }
 
     @DynamicPropertySource
@@ -84,8 +83,6 @@ public class UploadIntegrationTest {
         registry.add("cloud.aws.region", () -> localstack.getRegion());
         registry.add("application.s3.bucket", () -> bucketName);
         registry.add("application.sqs.queueUrl", () -> queueUrl);
-        registry.add("application.sqs.dlqUrl", () -> "");
-        registry.add("application.sqs.maxRetries", () -> "1");
     }
 
     @AfterAll

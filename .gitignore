@@ -33,3 +33,9 @@ target/
 .env.prod
 !.env.example
 !.env.local.example
+
+# IDE files
+.idea/
+*.iml
+*.iws
+*.ipr
