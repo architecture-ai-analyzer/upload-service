@@ -1,0 +1,41 @@
+services:
+  localstack:
+    image: localstack/localstack:latest
+    ports:
+      - "4566:4566"
+    environment:
+      - SERVICES=s3,sqs
+      - DEFAULT_REGION=us-east-2
+      - DATA_DIR=/tmp/localstack/data
+    volumes:
+      - localstack_data:/tmp/localstack
+
+  app:
+    build: .
+    depends_on:
+      localstack:
+        condition: service_started
+    ports:
+      - "8080:8080"
+    env_file:
+      - envs/.env.local
+    environment:
+      - SPRING_PROFILES_ACTIVE=dev
+    restart: on-failure
+
+  setup:
+    image: localstack/localstack:latest
+    depends_on:
+      - localstack
+    entrypoint: ["/bin/sh","-c"]
+    command: >
+      "sleep 5;
+       awslocal s3 mb s3://upload-bucket || true;
+       awslocal sqs create-queue --queue-name upload-queue || true;
+       echo 'resources created';"
+    environment:
+      - SERVICES=s3,sqs
+    restart: 'no'
+
+volumes:
+  localstack_data:
