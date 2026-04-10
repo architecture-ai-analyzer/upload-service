@@ -1,0 +1,11 @@
+.git
+.github
+.idea
+target
+.env
+.env.*
+!.env.example
+README.md
+docs
+ecs
+envs
