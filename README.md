@@ -44,7 +44,7 @@ O projeto **Hackathon Services** aborda o desafio de **receber, armazenar e proc
 #### Infraestrutura
 
 - **Container**: Docker + Docker Compose (desenvolvimento)
-- **Cloud**: AWS (ECS para deploy)
+- **Cloud**: AWS (ECS para deploy) + Docker Hub (registry de imagens)
 - **LocalStack**: Emulação local de S3/SQS (testes)
 
 ### Arquitetura de Componentes
@@ -318,6 +318,26 @@ ou
 ---
 
 ## 🚀 Instruções de Execução
+
+## 🔁 Pipeline CI/CD
+
+- **Build**: executa `mvn -B -ntp verify` em toda `pull_request` e `push`.
+- **Teste de imagem**: executa `docker build` para validar a imagem publicada pela pipeline.
+- **Deploy**: em `push`, resolve o ambiente a partir do nome da branch, publica a imagem no Docker Hub e atualiza o serviço ECS correspondente.
+
+### Convenções da pipeline
+
+- **Região AWS padrão**: `us-east-2`.
+- **Ambiente**: derivado da branch atual, convertido para minúsculas e com caracteres inválidos substituídos por `-`.
+- **Cluster ECS**: `${ECS_CLUSTER_PREFIX}-${branch}`.
+- **Service ECS**: `${ECS_SERVICE_PREFIX}-${branch}`.
+- **Spring profile**: recebe o mesmo nome do ambiente derivado da branch.
+- **Imagem Docker**: `docker.io/<DOCKERHUB_USERNAME>/<DOCKERHUB_IMAGE_NAME>:<github.sha>`.
+
+### Secrets e variables esperados no GitHub
+
+- **Secrets**: `AWS_ROLE_TO_ASSUME`, `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`.
+- **Variables opcionais**: `AWS_REGION`, `DOCKERHUB_IMAGE_NAME`, `ECS_CLUSTER_PREFIX`, `ECS_SERVICE_PREFIX`, `ECS_CONTAINER_NAME`.
 
 ### Pré-requisitos
 

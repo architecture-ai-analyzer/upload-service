@@ -9,33 +9,33 @@
   "containerDefinitions": [
     {
       "name": "upload-service",
-      "image": "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/upload-service:${IMAGE_TAG}",
+      "image": "${DOCKER_IMAGE_URI}",
       "essential": true,
       "portMappings": [{ "containerPort": 8080, "protocol": "tcp" }],
       "environment": [
-        { "name": "SPRING_PROFILES_ACTIVE", "value": "prod" },
+        { "name": "SPRING_PROFILES_ACTIVE", "value": "${DEPLOY_ENV}" },
         { "name": "CLOUD_AWS_REGION", "value": "${AWS_REGION}" }
       ],
       "secrets": [
         {
           "name": "SPRING_DATASOURCE_URL",
-          "valueFrom": "arn:aws:ssm:${AWS_REGION}:${AWS_ACCOUNT_ID}:parameter/upload-service/prod/SPRING_DATASOURCE_URL"
+          "valueFrom": "arn:aws:ssm:${AWS_REGION}:${AWS_ACCOUNT_ID}:parameter/upload-service/${DEPLOY_ENV}/SPRING_DATASOURCE_URL"
         },
         {
           "name": "SPRING_DATASOURCE_USERNAME",
-          "valueFrom": "arn:aws:ssm:${AWS_REGION}:${AWS_ACCOUNT_ID}:parameter/upload-service/prod/SPRING_DATASOURCE_USERNAME"
+          "valueFrom": "arn:aws:ssm:${AWS_REGION}:${AWS_ACCOUNT_ID}:parameter/upload-service/${DEPLOY_ENV}/SPRING_DATASOURCE_USERNAME"
         },
         {
           "name": "SPRING_DATASOURCE_PASSWORD",
-          "valueFrom": "arn:aws:ssm:${AWS_REGION}:${AWS_ACCOUNT_ID}:parameter/upload-service/prod/SPRING_DATASOURCE_PASSWORD"
+          "valueFrom": "arn:aws:ssm:${AWS_REGION}:${AWS_ACCOUNT_ID}:parameter/upload-service/${DEPLOY_ENV}/SPRING_DATASOURCE_PASSWORD"
         },
         {
           "name": "APPLICATION_S3_BUCKET",
-          "valueFrom": "arn:aws:ssm:${AWS_REGION}:${AWS_ACCOUNT_ID}:parameter/upload-service/prod/APPLICATION_S3_BUCKET"
+          "valueFrom": "arn:aws:ssm:${AWS_REGION}:${AWS_ACCOUNT_ID}:parameter/upload-service/${DEPLOY_ENV}/APPLICATION_S3_BUCKET"
         },
         {
           "name": "APPLICATION_SQS_QUEUE_URL",
-          "valueFrom": "arn:aws:ssm:${AWS_REGION}:${AWS_ACCOUNT_ID}:parameter/upload-service/prod/APPLICATION_SQS_QUEUE_URL"
+          "valueFrom": "arn:aws:ssm:${AWS_REGION}:${AWS_ACCOUNT_ID}:parameter/upload-service/${DEPLOY_ENV}/APPLICATION_SQS_QUEUE_URL"
         }
       ],
       "healthCheck": {
@@ -51,7 +51,7 @@
       "logConfiguration": {
         "logDriver": "awslogs",
         "options": {
-          "awslogs-group": "/ecs/upload-service/app",
+          "awslogs-group": "/ecs/upload-service/${DEPLOY_ENV}",
           "awslogs-region": "${AWS_REGION}",
           "awslogs-stream-prefix": "upload-service"
         }
