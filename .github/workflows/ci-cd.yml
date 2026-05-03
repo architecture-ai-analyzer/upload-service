@@ -3,7 +3,6 @@ name: CI/CD - Upload Service Build & ECS Deploy
 on:
   push:
     branches:
-      - pipeline
       - main
       - homologation
   workflow_dispatch:
