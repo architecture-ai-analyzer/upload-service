@@ -1,6 +1,7 @@
 package com.fiap.hackathon.upload_service.adapter.controller;
 
 import com.fiap.hackathon.upload_service.adapter.dto.ApiErrorResponse;
+import com.fiap.hackathon.upload_service.service.AnalysisCallbackService;
 import org.springframework.http.converter.HttpMessageConversionException;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.http.HttpStatus;
@@ -14,11 +15,15 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.multipart.MultipartException;
 import org.springframework.web.multipart.support.MissingServletRequestPartException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.stream.Collectors;
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
+    
+    private static final Logger log = LoggerFactory.getLogger(ApiExceptionHandler.class);
 
         @ExceptionHandler(ResourceNotFoundException.class)
         public ResponseEntity<ApiErrorResponse> handleResourceNotFound(ResourceNotFoundException ex) {
@@ -37,6 +42,26 @@ public class ApiExceptionHandler {
                         "Invalid upload request",
                         ex.getCode(),
                         ex.getDetail()
+                ));
+    }
+
+    @ExceptionHandler(AnalysisCallbackService.UploadNotFoundException.class)
+    public ResponseEntity<ApiErrorResponse> handleUploadNotFound(AnalysisCallbackService.UploadNotFoundException ex) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(new ApiErrorResponse(
+                        "Not Found",
+                        ex.getCode(),
+                        ex.getMessage()
+                ));
+    }
+
+    @ExceptionHandler(AnalysisCallbackService.UploadConflictException.class)
+    public ResponseEntity<ApiErrorResponse> handleUploadConflict(AnalysisCallbackService.UploadConflictException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(new ApiErrorResponse(
+                        "Conflict",
+                        ex.getCode(),
+                        ex.getMessage()
                 ));
     }
 
@@ -96,6 +121,12 @@ public class ApiExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiErrorResponse> handleUnexpected(Exception ex) {
+        System.err.println("===== UNEXPECTED EXCEPTION =====");
+        System.err.println("Exception type: " + ex.getClass().getName());
+        System.err.println("Message: " + ex.getMessage());
+        ex.printStackTrace(System.err);
+        System.err.println("===== END EXCEPTION =====");
+        log.error("Unexpected error in request processing", ex);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(new ApiErrorResponse(
                         "Unexpected error",
