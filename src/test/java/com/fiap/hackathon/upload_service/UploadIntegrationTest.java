@@ -83,6 +83,8 @@ public class UploadIntegrationTest {
         registry.add("cloud.aws.region", () -> localstack.getRegion());
         registry.add("application.s3.bucket", () -> bucketName);
         registry.add("application.sqs.queueUrl", () -> queueUrl);
+        registry.add("app.security.gateway-trust.enabled", () -> "false");
+        registry.add("app.security.rate-limit.upload.enabled", () -> "false");
     }
 
     @AfterAll
@@ -105,8 +107,7 @@ public class UploadIntegrationTest {
         String projectId = String.valueOf(projectBody.get("id"));
 
         // 2) Upload file with metadata in single multipart request
-        String fileContent = "This is a test PDF file content";
-        byte[] fileBytes = fileContent.getBytes();
+        byte[] fileBytes = "%PDF-1.7\n%Test content".getBytes();
         
         HttpResponse<String> uploadResp = postMultipart("/v1/uploads", 
             "diagram.pdf", 
@@ -237,7 +238,7 @@ public class UploadIntegrationTest {
         Map<String, Object> projectBody = objectMapper.readValue(projectResp.body(), Map.class);
         String projectId = String.valueOf(projectBody.get("id"));
 
-        byte[] fileBytes = new byte[] {(byte) 0x89, 0x50, 0x4E, 0x47};
+        byte[] fileBytes = new byte[] {(byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A};
         HttpResponse<String> uploadResp = postMultipart(
             "/v1/uploads",
             "imagem.pdf",
@@ -249,9 +250,36 @@ public class UploadIntegrationTest {
 
         assertThat(uploadResp.statusCode()).isEqualTo(HttpStatus.BAD_REQUEST.value());
         Map<String, Object> errorBody = objectMapper.readValue(uploadResp.body(), Map.class);
-        assertThat(errorBody.get("message")).isEqualTo("Invalid request");
-        assertThat(errorBody.get("code")).isEqualTo("BAD_REQUEST");
+        assertThat(errorBody.get("message")).isEqualTo("Invalid upload request");
+        assertThat(errorBody.get("code")).isEqualTo("EXTENSION_CONTENT_TYPE_MISMATCH");
         assertThat(String.valueOf(errorBody.get("detail"))).contains("extension");
+    }
+
+    @Test
+    public void unifiedUpload_withMagicBytesMismatch_returns400() throws Exception {
+        HttpResponse<String> projectResp = postJson("/v1/projects", Map.of(
+                "name", "Projeto Assinatura",
+                "description", "Projeto para validacao de assinatura",
+                "ownerId", "owner-1"
+        ));
+        assertThat(projectResp.statusCode()).isEqualTo(HttpStatus.OK.value());
+        Map<String, Object> projectBody = objectMapper.readValue(projectResp.body(), Map.class);
+        String projectId = String.valueOf(projectBody.get("id"));
+
+        byte[] pngBytes = new byte[] {(byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A};
+        HttpResponse<String> uploadResp = postMultipart(
+                "/v1/uploads",
+                "arquivo.pdf",
+                "application/pdf",
+                pngBytes,
+                projectId,
+                "user-123"
+        );
+
+        assertThat(uploadResp.statusCode()).isEqualTo(HttpStatus.BAD_REQUEST.value());
+        Map<String, Object> errorBody = objectMapper.readValue(uploadResp.body(), Map.class);
+        assertThat(errorBody.get("message")).isEqualTo("Invalid upload request");
+        assertThat(errorBody.get("code")).isEqualTo("MIME_SIGNATURE_MISMATCH");
     }
 
     @Test

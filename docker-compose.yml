@@ -1,20 +1,27 @@
 services:
   localstack:
-    image: localstack/localstack:latest
+    image: localstack/localstack:1.4.0
     ports:
       - "4566:4566"
     environment:
       - SERVICES=s3,sqs
       - DEFAULT_REGION=us-east-2
-      - DATA_DIR=/tmp/localstack/data
+      - PERSISTENCE=1
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:4566/_localstack/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
     volumes:
-      - localstack_data:/tmp/localstack
+      - localstack_data:/var/lib/localstack
 
   app:
     build: .
     depends_on:
       localstack:
-        condition: service_started
+        condition: service_healthy
+      setup:
+        condition: service_completed_successfully
     ports:
       - "8080:8080"
     env_file:
@@ -24,17 +31,22 @@ services:
     restart: on-failure
 
   setup:
-    image: localstack/localstack:latest
+    image: localstack/localstack:1.4.0
     depends_on:
-      - localstack
+      localstack:
+        condition: service_healthy
     entrypoint: ["/bin/sh","-c"]
     command: >
       "sleep 5;
-       awslocal s3 mb s3://upload-bucket || true;
-       awslocal sqs create-queue --queue-name upload-queue || true;
+       aws --endpoint-url=http://localstack:4566 s3 mb s3://upload || true;
+       aws --endpoint-url=http://localstack:4566 sqs create-queue --queue-name upload-queue || true;
+       aws --endpoint-url=http://localstack:4566 sqs create-queue --queue-name analysis-result-queue || true;
        echo 'resources created';"
     environment:
       - SERVICES=s3,sqs
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - AWS_DEFAULT_REGION=us-east-2
     restart: 'no'
 
 volumes:
