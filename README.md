@@ -188,8 +188,9 @@ O projeto **Hackathon Services** aborda o desafio de **receber, armazenar e proc
         ┌──(Serviço Externo processa)──┐
         │                               │
         ▼                               ▼
-   SCANNED_OK              QUARANTINED/ERRO
-   (Arquivo OK)            (Risco detectado)
+         SCANNED_OK         QUARANTINED / ANALYSIS_INVALID /
+         (Arquivo OK)       ANALYSIS_REVIEW_REQUIRED
+                (riscos, inconsistência, revisão manual)
         │                               │
         └───────────┬────────────────────┘
                     │
@@ -219,14 +220,18 @@ O projeto **Hackathon Services** aborda o desafio de **receber, armazenar e proc
     │                  │
     │                  ├─► [SCANNED_OK] → Frontend exibe relatório
     │                  │
-    │                  └─► [QUARANTINED/ERRO] → Frontend exibe erro
+  │                  ├─► [QUARANTINED] → Frontend exibe bloqueio
+  │                  │
+  │                  ├─► [ANALYSIS_INVALID] → Frontend exibe erro de análise
+  │                  │
+  │                  └─► [ANALYSIS_REVIEW_REQUIRED] → Frontend exibe revisão pendente
     │
     └─► [NÃO_PUBLICADO] (se queue URL vazia)
 
 
 Responsabilidades:
 ├─ upload-service: PENDING → COMPLETED
-└─ serviço externo: COMPLETED → SCANNED_OK/QUARANTINED
+└─ serviço externo: COMPLETED → SCANNED_OK / QUARANTINED / ANALYSIS_INVALID / ANALYSIS_REVIEW_REQUIRED
 ```
 
 ### 3. Contrato de API - Principais Endpoints

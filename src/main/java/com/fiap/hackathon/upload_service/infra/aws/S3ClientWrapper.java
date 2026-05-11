@@ -8,6 +8,7 @@ import software.amazon.awssdk.core.sync.ResponseTransformer;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+import software.amazon.awssdk.services.s3.model.ServerSideEncryption;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -19,6 +20,12 @@ public class S3ClientWrapper {
 
     @Value("${application.s3.bucket:upload}")
     private String bucket;
+
+    @Value("${application.s3.server-side-encryption.enabled:true}")
+    private boolean serverSideEncryptionEnabled;
+
+    @Value("${application.s3.server-side-encryption.algorithm:AES256}")
+    private String serverSideEncryptionAlgorithm;
 
     public S3ClientWrapper(S3Client s3Client) {
         this.s3Client = s3Client;
@@ -38,12 +45,17 @@ public class S3ClientWrapper {
                 file.getSize()
         );
         
-        PutObjectRequest putReq = PutObjectRequest.builder()
+        PutObjectRequest.Builder builder = PutObjectRequest.builder()
                 .bucket(bucket)
                 .key(key)
                 .contentType(file.getContentType())
-                .contentLength(file.getSize())
-                .build();
+                .contentLength(file.getSize());
+
+        if (serverSideEncryptionEnabled && "AES256".equalsIgnoreCase(serverSideEncryptionAlgorithm)) {
+            builder.serverSideEncryption(ServerSideEncryption.AES256);
+        }
+
+        PutObjectRequest putReq = builder.build();
         
         var response = s3Client.putObject(putReq, requestBody);
         return response.eTag();
