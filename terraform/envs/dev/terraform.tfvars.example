@@ -1,0 +1,16 @@
+# Dev environment tfvars
+# Copy to terraform.tfvars and fill in values
+
+rds_instance_class    = "db.t3.micro"
+rds_allocated_storage = 20
+
+# IMPORTANT: Set RDS password
+rds_password = "YourSecurePassword123!"
+
+# Container image
+container_image = "upload-service:latest"
+
+# AWS Credentials for pod access to S3
+# Get these from your AWS IAM user credentials
+aws_access_key_id     = "AKIA..."
+aws_secret_access_key = "your-secret-access-key..."

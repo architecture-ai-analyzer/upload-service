@@ -39,3 +39,47 @@ target/
 *.iml
 *.iws
 *.ipr
+
+# Terraform files
+.terraform/
+.terraform.lock.hcl
+terraform.tfstate
+terraform.tfstate.*
+tfplan
+tfplan.json
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# IDE
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+.vscode/
+*.iml
+
+# OS
+Thumbs.db
+.directory
+
+# Sensitive files
+*.tfvars
+!*example.tfvars
+!*example.tfvars.json
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+
+# Bash/Shell
+*.sh.bak
