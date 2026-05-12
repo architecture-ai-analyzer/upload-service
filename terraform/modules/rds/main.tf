@@ -49,11 +49,8 @@ resource "aws_db_instance" "main" {
   username = var.db_username
   password = var.db_password
 
-  backup_retention_period = var.backup_retention_days
-  backup_window           = "03:00-04:00"
-  maintenance_window      = "sun:04:00-sun:05:00"
-  copy_tags_to_snapshot   = true
-  delete_automated_backups = true
+  # Free tier: backup_retention_period max 1 day, or 0 for no backups
+  backup_retention_period = 0
   skip_final_snapshot     = var.skip_final_snapshot
 
   tags = {

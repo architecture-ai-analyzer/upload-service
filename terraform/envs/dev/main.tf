@@ -3,6 +3,9 @@ locals {
   environment = "dev"
 }
 
+# Get current AWS account ID for SQS queue URLs
+data "aws_caller_identity" "current" {}
+
 module "rds" {
   source = "../../modules/rds"
 
@@ -11,7 +14,7 @@ module "rds" {
   db_password             = var.rds_password
   instance_class          = var.rds_instance_class
   allocated_storage       = var.rds_allocated_storage
-  engine_version          = "16.3"
+  engine_version          = "16"
   backup_retention_days   = 7
   skip_final_snapshot     = true
   environment             = local.environment
@@ -21,14 +24,10 @@ module "rds" {
   security_group_name     = "upload-service-rds-sg-${local.environment}"
 }
 
-module "s3" {
-  source = "../../modules/s3"
-
-  bucket_name             = "upload-service-bucket-${local.environment}"
-  versioning_enabled      = true
-  server_side_encryption  = "AES256"
-  environment             = local.environment
-  project_name            = "upload-service"
+# S3 Bucket - Reference existing bucket instead of creating new one
+# Use the bucket created manually in AWS
+data "aws_s3_bucket" "main" {
+  bucket = "upload-service-bucket-ai-analyzer"
 }
 
 # SQS Module - COMMENTED OUT: Queue will be created manually in AWS
@@ -70,9 +69,11 @@ data "terraform_remote_state" "vpc" {
   backend = "s3"
 
   config = {
-    bucket         = "tf-state-ia-arch-analyzer"
+    bucket         = "tf-state-ai-architecture-analyzer"
     key            = "v1/networking/${local.environment}/terraform.tfstate"
     region         = "us-east-2"
+    dynamodb_table = "tf-state-lock"
+    encrypt        = true
   }
 }
 
@@ -80,8 +81,10 @@ data "terraform_remote_state" "eks" {
   backend = "s3"
 
   config = {
-    bucket         = "tf-state-ia-arch-analyzer"
+    bucket         = "tf-state-ai-architecture-analyzer"
     key            = "v1/eks/${local.environment}/terraform.tfstate"
     region         = "us-east-2"
+    dynamodb_table = "tf-state-lock"
+    encrypt        = true
   }
 }
