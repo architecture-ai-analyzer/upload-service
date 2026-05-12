@@ -6,7 +6,7 @@ resource "kubernetes_config_map" "upload_service" {
 
   data = {
     SPRING_APPLICATION_NAME = "upload-service"
-    AWS_REGION             = "us-east-1"  # Match your AWS region
+    AWS_REGION             = "us-east-2"  # Match your AWS region
     LOG_LEVEL              = "INFO"
 
     # RDS Configuration
@@ -14,20 +14,18 @@ resource "kubernetes_config_map" "upload_service" {
     SPRING_DATASOURCE_USERNAME = module.rds.username
 
     # S3 Configuration
-    AWS_S3_BUCKET_NAME = module.s3.bucket_id
+    AWS_S3_BUCKET_NAME = data.aws_s3_bucket.main.id
 
-    # SQS Configuration - COMMENTED OUT: Queue will be created manually in AWS
-    # AWS_SQS_QUEUE_NAME   = module.sqs.queue_id
-    # AWS_SQS_QUEUE_REGION = "us-east-1"
-    # 
-    # After creating the queue manually, add these values:
-    # AWS_SQS_QUEUE_NAME   = "upload-service-queue-dev"  # Update with actual queue name
-    # AWS_SQS_QUEUE_REGION = "us-east-1"
+    # SQS Configuration - Upload Queue
+    AWS_UPLOAD_QUEUE_URL = "https://sqs.us-east-2.amazonaws.com/${data.aws_caller_identity.current.account_id}/upload-queue"
+
+    # SQS Configuration - Status Update Queue
+    AWS_STATUS_UPDATE_QUEUE_URL = "https://sqs.us-east-2.amazonaws.com/${data.aws_caller_identity.current.account_id}/status-update-queue"
   }
 
   depends_on = [
     kubernetes_namespace.upload_service,
     module.rds,
-    module.s3
+    data.aws_s3_bucket.main
   ]
 }

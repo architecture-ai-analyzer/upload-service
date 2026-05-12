@@ -15,7 +15,7 @@ output "rds_jdbc_url" {
 
 output "s3_bucket" {
   description = "S3 bucket name"
-  value       = module.s3.bucket_id
+  value       = data.aws_s3_bucket.main.id
 }
 
 # SQS Queue URL - COMMENTED OUT: Queue will be created manually in AWS

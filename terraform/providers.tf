@@ -26,13 +26,5 @@ provider "aws" {
   }
 }
 
-provider "kubernetes" {
-  host                   = local.eks_data.cluster_endpoint
-  cluster_ca_certificate = base64decode(local.eks_data.cluster_certificate_authority_data)
-
-  exec {
-    api_version = "client.authentication.k8s.io/v1beta1"
-    args        = ["eks", "get-token", "--cluster-name", local.eks_data.cluster_name]
-    command     = "aws"
-  }
-}
+# Kubernetes provider is configured in envs/dev/providers.tf override
+# This avoids duplicate provider definitions

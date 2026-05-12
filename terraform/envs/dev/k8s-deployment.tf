@@ -5,7 +5,7 @@ resource "kubernetes_deployment" "upload_service" {
     kubernetes_config_map.upload_service,
     kubernetes_secret.upload_service,
     module.rds,
-    module.s3
+    data.aws_s3_bucket.main
   ]
 
   metadata {
@@ -47,7 +47,7 @@ resource "kubernetes_deployment" "upload_service" {
         container {
           name              = "upload-service"
           image             = var.container_image
-          image_pull_policy = "IfNotPresent"
+          image_pull_policy = "Always"
 
           port {
             name           = "http"
