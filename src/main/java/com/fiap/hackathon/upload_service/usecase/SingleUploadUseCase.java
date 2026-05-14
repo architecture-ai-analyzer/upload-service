@@ -193,6 +193,7 @@ public class SingleUploadUseCase {
         upload.setContentType(fileContentType);
         upload.setSizeBytes(fileSize);
         upload.setUploaderId(request.getUploaderId());
+        upload.setTemplateId(request.getTemplateId());
         
         if (request.getProjectId() != null && !request.getProjectId().isBlank()) {
             try {
@@ -216,7 +217,8 @@ public class SingleUploadUseCase {
                     fileContentType,
                     fileSize,
                     request.getUploaderId(),
-                    request.getProjectId()
+                    request.getProjectId(),
+                    request.getTemplateId()
             );
             try {
                 String body = objectMapper.writeValueAsString(payload);
@@ -298,14 +300,16 @@ public class SingleUploadUseCase {
         public Long sizeBytes;
         public String uploaderId;
         public String projectId;
+        public String templateId;
 
-        public UploadEvent(String eventId, String s3Key, String contentType, Long sizeBytes, String uploaderId, String projectId) {
+        public UploadEvent(String eventId, String s3Key, String contentType, Long sizeBytes, String uploaderId, String projectId, String templateId) {
             this.eventId = eventId;
             this.s3Key = s3Key;
             this.contentType = contentType;
             this.sizeBytes = sizeBytes;
             this.uploaderId = uploaderId;
             this.projectId = projectId;
+            this.templateId = templateId;
         }
     }
 }

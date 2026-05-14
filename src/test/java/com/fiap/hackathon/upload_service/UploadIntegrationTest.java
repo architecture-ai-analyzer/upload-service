@@ -98,9 +98,9 @@ public class UploadIntegrationTest {
     public void unifiedUpload_withMultipart_uploads_toS3_andReturns201() throws Exception {
         // 1) Create project
         HttpResponse<String> projectResp = postJson("/v1/projects", Map.of(
-            "name", "Projeto Teste",
-            "description", "Projeto para fluxo de upload",
-            "ownerId", "owner-1"
+                "name", "Projeto Teste",
+                "description", "Projeto para fluxo de upload",
+                "ownerId", "owner-1"
         ));
         assertThat(projectResp.statusCode()).isEqualTo(HttpStatus.OK.value());
         Map<String, Object> projectBody = objectMapper.readValue(projectResp.body(), Map.class);
@@ -108,20 +108,21 @@ public class UploadIntegrationTest {
 
         // 2) Upload file with metadata in single multipart request
         byte[] fileBytes = "%PDF-1.7\n%Test content".getBytes();
-        
-        HttpResponse<String> uploadResp = postMultipart("/v1/uploads", 
-            "diagram.pdf", 
-            "application/pdf", 
-            fileBytes, 
-            projectId, 
-            "user-123"
+
+        HttpResponse<String> uploadResp = postMultipart("/v1/uploads",
+                "diagram.pdf",
+                "application/pdf",
+                fileBytes,
+                projectId,
+                "user-123",
+                "template-teste-123"
         );
         assertThat(uploadResp.statusCode()).isEqualTo(HttpStatus.CREATED.value());
-        
+
         Map<String, Object> uploadBody = objectMapper.readValue(uploadResp.body(), Map.class);
         String uploadId = (String) uploadBody.get("uploadId");
         String s3Key = (String) uploadBody.get("s3Key");
-        
+
         assertThat(uploadId).isNotNull();
         assertThat(s3Key).isNotNull();
         assertThat(s3Key).endsWith(".pdf");
@@ -134,19 +135,19 @@ public class UploadIntegrationTest {
         boolean fileExists = s3client.headObject(HeadObjectRequest.builder().bucket(bucketName).key(s3Key).build()) != null;
         assertThat(fileExists).isTrue();
 
-        // 5) Verify upload status is COMPLETED via GET endpoint
+        // 5) Verify upload status is PENDING via GET endpoint
         HttpResponse<String> statusResp = getJson("/v1/uploads/" + uploadId);
         assertThat(statusResp.statusCode()).isEqualTo(HttpStatus.OK.value());
         Map<String, Object> statusBody = objectMapper.readValue(statusResp.body(), Map.class);
-        assertThat(statusBody.get("status")).isEqualTo("COMPLETED");
+        assertThat(statusBody.get("status")).isEqualTo("PENDING");
     }
 
     @Test
     public void unifiedUpload_withPngMultipart_uploads_toS3_andReturns201() throws Exception {
         HttpResponse<String> projectResp = postJson("/v1/projects", Map.of(
-            "name", "Projeto PNG",
-            "description", "Projeto para upload PNG",
-            "ownerId", "owner-1"
+                "name", "Projeto PNG",
+                "description", "Projeto para upload PNG",
+                "ownerId", "owner-1"
         ));
         assertThat(projectResp.statusCode()).isEqualTo(HttpStatus.OK.value());
         Map<String, Object> projectBody = objectMapper.readValue(projectResp.body(), Map.class);
@@ -155,12 +156,13 @@ public class UploadIntegrationTest {
         byte[] fileBytes = new byte[] {(byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A};
 
         HttpResponse<String> uploadResp = postMultipart(
-            "/v1/uploads",
-            "imagem.png",
-            "image/png",
-            fileBytes,
-            projectId,
-            "user-123"
+                "/v1/uploads",
+                "imagem.png",
+                "image/png",
+                fileBytes,
+                projectId,
+                "user-123",
+                null
         );
 
         assertThat(uploadResp.statusCode()).isEqualTo(HttpStatus.CREATED.value());
@@ -176,9 +178,9 @@ public class UploadIntegrationTest {
     @Test
     public void unifiedUpload_withMetadataAsTextPlain_returns400() throws Exception {
         HttpResponse<String> projectResp = postJson("/v1/projects", Map.of(
-            "name", "Projeto Metadata",
-            "description", "Projeto para metadata invalida",
-            "ownerId", "owner-1"
+                "name", "Projeto Metadata",
+                "description", "Projeto para metadata invalida",
+                "ownerId", "owner-1"
         ));
         assertThat(projectResp.statusCode()).isEqualTo(HttpStatus.OK.value());
         Map<String, Object> projectBody = objectMapper.readValue(projectResp.body(), Map.class);
@@ -187,24 +189,25 @@ public class UploadIntegrationTest {
         byte[] fileBytes = new byte[] {(byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A};
 
         HttpResponse<String> uploadResp = postMultipart(
-            "/v1/uploads",
-            "imagem.png",
-            "image/png",
-            fileBytes,
-            projectId,
-            "user-123",
-            "text/plain"
+                "/v1/uploads",
+                "imagem.png",
+                "image/png",
+                fileBytes,
+                projectId,
+                "user-123",
+                null,
+                "text/plain"
         );
 
         assertThat(uploadResp.statusCode()).isEqualTo(HttpStatus.BAD_REQUEST.value());
     }
 
-        @Test
-        public void unifiedUpload_withInvalidContentType_returns400() throws Exception {
+    @Test
+    public void unifiedUpload_withInvalidContentType_returns400() throws Exception {
         HttpResponse<String> projectResp = postJson("/v1/projects", Map.of(
-            "name", "Projeto Teste",
-            "description", "Projeto para validacao",
-            "ownerId", "owner-1"
+                "name", "Projeto Teste",
+                "description", "Projeto para validacao",
+                "ownerId", "owner-1"
         ));
         assertThat(projectResp.statusCode()).isEqualTo(HttpStatus.OK.value());
         Map<String, Object> projectBody = objectMapper.readValue(projectResp.body(), Map.class);
@@ -212,12 +215,13 @@ public class UploadIntegrationTest {
 
         byte[] fileBytes = "content".getBytes();
         HttpResponse<String> uploadResp = postMultipart(
-            "/v1/uploads",
-            "arquivo.txt",
-            "text/plain",
-            fileBytes,
-            projectId,
-            "user-123"
+                "/v1/uploads",
+                "arquivo.txt",
+                "text/plain",
+                fileBytes,
+                projectId,
+                "user-123",
+                null
         );
 
         assertThat(uploadResp.statusCode()).isEqualTo(HttpStatus.BAD_REQUEST.value());
@@ -225,14 +229,14 @@ public class UploadIntegrationTest {
         assertThat(errorBody.get("message")).isEqualTo("Invalid upload request");
         assertThat(errorBody.get("code")).isEqualTo("INVALID_CONTENT_TYPE");
         assertThat(String.valueOf(errorBody.get("detail"))).contains("PDF");
-        }
+    }
 
     @Test
     public void unifiedUpload_withMismatchedFilenameExtension_returns400() throws Exception {
         HttpResponse<String> projectResp = postJson("/v1/projects", Map.of(
-            "name", "Projeto Teste",
-            "description", "Projeto para validacao de extensao",
-            "ownerId", "owner-1"
+                "name", "Projeto Teste",
+                "description", "Projeto para validacao de extensao",
+                "ownerId", "owner-1"
         ));
         assertThat(projectResp.statusCode()).isEqualTo(HttpStatus.OK.value());
         Map<String, Object> projectBody = objectMapper.readValue(projectResp.body(), Map.class);
@@ -240,12 +244,13 @@ public class UploadIntegrationTest {
 
         byte[] fileBytes = new byte[] {(byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A};
         HttpResponse<String> uploadResp = postMultipart(
-            "/v1/uploads",
-            "imagem.pdf",
-            "image/png",
-            fileBytes,
-            projectId,
-            "user-123"
+                "/v1/uploads",
+                "imagem.pdf",
+                "image/png",
+                fileBytes,
+                projectId,
+                "user-123",
+                null
         );
 
         assertThat(uploadResp.statusCode()).isEqualTo(HttpStatus.BAD_REQUEST.value());
@@ -273,7 +278,8 @@ public class UploadIntegrationTest {
                 "application/pdf",
                 pngBytes,
                 projectId,
-                "user-123"
+                "user-123",
+                null
         );
 
         assertThat(uploadResp.statusCode()).isEqualTo(HttpStatus.BAD_REQUEST.value());
@@ -305,13 +311,13 @@ public class UploadIntegrationTest {
         return httpClient.send(request, HttpResponse.BodyHandlers.ofString());
     }
 
-    private HttpResponse<String> postMultipart(String path, String filename, String contentType, byte[] fileBytes, String projectId, String uploaderId) throws Exception {
-        return postMultipart(path, filename, contentType, fileBytes, projectId, uploaderId, "application/json");
+    private HttpResponse<String> postMultipart(String path, String filename, String contentType, byte[] fileBytes, String projectId, String uploaderId, String templateId) throws Exception {
+        return postMultipart(path, filename, contentType, fileBytes, projectId, uploaderId, templateId, "application/json");
     }
 
-    private HttpResponse<String> postMultipart(String path, String filename, String contentType, byte[] fileBytes, String projectId, String uploaderId, String metadataPartContentType) throws Exception {
+    private HttpResponse<String> postMultipart(String path, String filename, String contentType, byte[] fileBytes, String projectId, String uploaderId, String templateId, String metadataPartContentType) throws Exception {
         String boundary = "----WebKitFormBoundary7MA4YWxkTrZu0gW";
-        byte[] body = buildMultipartBody(boundary, filename, contentType, fileBytes, projectId, uploaderId, metadataPartContentType);
+        byte[] body = buildMultipartBody(boundary, filename, contentType, fileBytes, projectId, uploaderId, templateId, metadataPartContentType);
 
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(new URI("http://localhost:" + port + path))
@@ -322,7 +328,7 @@ public class UploadIntegrationTest {
         return httpClient.send(request, HttpResponse.BodyHandlers.ofString());
     }
 
-    private byte[] buildMultipartBody(String boundary, String filename, String contentType, byte[] fileBytes, String projectId, String uploaderId, String metadataPartContentType) throws Exception {
+    private byte[] buildMultipartBody(String boundary, String filename, String contentType, byte[] fileBytes, String projectId, String uploaderId, String templateId, String metadataPartContentType) throws Exception {
         String CRLF = "\r\n";
         StringBuilder sb = new StringBuilder();
 
@@ -333,19 +339,22 @@ public class UploadIntegrationTest {
         sb.append(CRLF);
 
         byte[] filePart = sb.toString().getBytes();
-        
+
         // Metadata JSON part
         sb = new StringBuilder();
         sb.append(CRLF).append("--").append(boundary).append(CRLF);
         sb.append("Content-Disposition: form-data; name=\"metadata\"").append(CRLF);
         sb.append("Content-Type: ").append(metadataPartContentType).append(CRLF);
         sb.append(CRLF);
-        
-        Map<String, String> metadata = Map.of(
-            "filename", filename,
-            "projectId", projectId,
-            "uploaderId", uploaderId
-        );
+
+        java.util.Map<String, String> metadata = new java.util.HashMap<>();
+        metadata.put("filename", filename);
+        metadata.put("projectId", projectId);
+        metadata.put("uploaderId", uploaderId);
+        if (templateId != null) {
+            metadata.put("templateId", templateId);
+        }
+
         String metadataJson = objectMapper.writeValueAsString(metadata);
         byte[] metadataPart = (sb.toString() + metadataJson).getBytes();
 

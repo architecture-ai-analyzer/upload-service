@@ -61,7 +61,8 @@ public class UploadController {
                                             + "  \"metadata\": {\n"
                                             + "    \"filename\": \"resultado.pdf\",\n"
                                             + "    \"projectId\": \"11111111-1111-1111-1111-111111111111\",\n"
-                                            + "    \"uploaderId\": \"user-123\"\n"
+                                            + "    \"uploaderId\": \"user-123\",\n"
+                                            + "    \"templateId\": \"template-arquitetura-v1\"\n"
                                             + "  }\n"
                                             + "}"
                             )
@@ -132,7 +133,7 @@ public class UploadController {
 
         @Schema(
                 description = "JSON com os metadados do upload",
-                example = "{\"filename\":\"resultado.pdf\",\"projectId\":\"11111111-1111-1111-1111-111111111111\",\"uploaderId\":\"user-123\"}"
+                example = "{\"filename\":\"resultado.pdf\",\"projectId\":\"11111111-1111-1111-1111-111111111111\",\"uploaderId\":\"user-123\",\"templateId\":\"template-arquitetura-v1\"}"
         )
         public String metadata;
     }
