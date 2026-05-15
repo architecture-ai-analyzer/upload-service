@@ -1,8 +1,7 @@
 package com.fiap.hackathon.upload_service.infra.aws;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fiap.hackathon.upload_service.adapter.dto.AnalysisCallbackRequest;
-import com.fiap.hackathon.upload_service.adapter.dto.AnalysisResultMessage;
+import com.fiap.hackathon.upload_service.adapter.dto.DiagramStatusMessage;
 import com.fiap.hackathon.upload_service.config.SqsResultListenerProperties;
 import com.fiap.hackathon.upload_service.infra.audit.AuditEventPublisher;
 import com.fiap.hackathon.upload_service.service.AnalysisCallbackService;
@@ -20,8 +19,8 @@ import software.amazon.awssdk.services.sqs.model.ReceiveMessageResponse;
 import java.util.List;
 
 /**
- * Listens to SQS queue for analysis result messages from the processing service.
- * Polls the queue at regular intervals and processes results by updating upload status.
+ * Listens to SQS queue for diagram status messages from the processing service.
+ * Polls the queue at regular intervals and updates {@link com.fiap.hackathon.upload_service.domain.Upload} status.
  */
 @Service
 @ConditionalOnProperty(name = "app.sqs.result-listener.enabled", havingValue = "true")
@@ -49,10 +48,6 @@ public class AnalysisResultSqsListener {
         this.objectMapper = objectMapper;
     }
 
-    /**
-     * Scheduled task to poll the result queue at regular intervals.
-     * Runs every X seconds as configured in properties.
-     */
     @Scheduled(
             fixedDelayString = "${app.sqs.result-listener.poll-interval-seconds:10}",
             timeUnit = java.util.concurrent.TimeUnit.SECONDS,
@@ -87,7 +82,6 @@ public class AnalysisResultSqsListener {
                     deleteMessage(message);
                 } catch (Exception e) {
                     logger.error("Error processing analysis result message: {}", message.messageId(), e);
-                    // Don't delete on error - message will be retried after visibility timeout
                     auditEventPublisher.publishEvent(
                             AuditEventPublisher.EventType.SQS_PUBLISH_FAILURE,
                             null,
@@ -111,40 +105,34 @@ public class AnalysisResultSqsListener {
         }
     }
 
-    /**
-     * Process a single message from the queue.
-     * Deserializes the message, converts to AnalysisCallbackRequest, and processes via AnalysisCallbackService.
-     */
     private void processMessage(Message message) throws Exception {
         String body = message.body();
         logger.debug("Processing analysis result message: {}", message.messageId());
         logger.debug("Message body: {}", body);
 
-        // Deserialize the message
         try {
-            AnalysisResultMessage resultMessage = objectMapper.readValue(body, AnalysisResultMessage.class);
+            DiagramStatusMessage payload = objectMapper.readValue(body, DiagramStatusMessage.class);
 
-            // Validate the message
-            if (resultMessage.getUploadId() == null || resultMessage.getUploadId().isBlank()) {
-                throw new IllegalArgumentException("Message missing uploadId");
+            if (payload.getDiagramId() == null) {
+                throw new IllegalArgumentException("Message missing diagramId");
+            }
+            if (payload.getStatus() == null || payload.getStatus().isBlank()) {
+                throw new IllegalArgumentException("Message missing status");
             }
 
-            // Convert to AnalysisCallbackRequest format (internal format)
-            AnalysisCallbackRequest callbackRequest = convertToCallbackRequest(resultMessage);
+            analysisCallbackService.applyDiagramStatusFromQueue(
+                    payload.getDiagramId(),
+                    payload.getStatus(),
+                    "sqs-listener"
+            );
 
-            // Process the result message (updates upload status, emits audit events)
-            analysisCallbackService.processAnalysisResult(callbackRequest, "sqs-listener");
-
-            logger.debug("Successfully processed analysis result for upload: {}", resultMessage.getUploadId());
+            logger.debug("Successfully processed diagram status for upload: {}", payload.getDiagramId());
         } catch (com.fasterxml.jackson.databind.JsonMappingException | com.fasterxml.jackson.core.JsonParseException e) {
             logger.error("JSON parsing error in message body: {}. Error: {}", body, e.getMessage(), e);
             throw e;
         }
     }
 
-    /**
-     * Delete a message from the queue after successful processing.
-     */
     private void deleteMessage(Message message) {
         try {
             DeleteMessageRequest request = DeleteMessageRequest.builder()
@@ -157,30 +145,5 @@ public class AnalysisResultSqsListener {
         } catch (Exception e) {
             logger.error("Error deleting message from queue: {}", message.messageId(), e);
         }
-    }
-
-    /**
-     * Convert AnalysisResultMessage (from processing service) to AnalysisCallbackRequest (internal format).
-     */
-    private AnalysisCallbackRequest convertToCallbackRequest(AnalysisResultMessage resultMessage) {
-        AnalysisCallbackRequest request = new AnalysisCallbackRequest();
-        request.setUploadId(resultMessage.getUploadId());
-        request.setAnalysisResult(mapAnalysisResult(resultMessage.getAnalysisResult()));
-        request.setRiskScore(resultMessage.getRiskScore());
-        request.setFindings(resultMessage.getFindings());
-        request.setTimestamp(resultMessage.getTimestamp());
-        request.setAnalysisServiceId(resultMessage.getProcessingServiceId());
-        return request;
-    }
-
-    /**
-     * Map AnalysisResultMessage.AnalysisResult to AnalysisCallbackRequest.AnalysisResult.
-     */
-    private AnalysisCallbackRequest.AnalysisResult mapAnalysisResult(AnalysisResultMessage.AnalysisResult result) {
-        return switch (result) {
-            case OK -> AnalysisCallbackRequest.AnalysisResult.OK;
-            case QUARANTINED -> AnalysisCallbackRequest.AnalysisResult.QUARANTINED;
-            case INCONCLUSIVE -> AnalysisCallbackRequest.AnalysisResult.INCONCLUSIVE;
-        };
     }
 }

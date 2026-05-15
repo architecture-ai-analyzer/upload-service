@@ -48,6 +48,7 @@ services:
       - SPRING_PROFILES_ACTIVE=dev
     restart: on-failure
 
+  # S3 bucket and SQS queue names match defaults in application-dev.properties (profile dev).
   setup:
     image: localstack/localstack:1.4.0
     depends_on:

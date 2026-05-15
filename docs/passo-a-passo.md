@@ -400,7 +400,7 @@ docker exec \
   upload-service-localstack-1 \
   aws --endpoint-url=http://localhost:4566 sqs send-message \
   --queue-url http://localhost:4566/000000000000/analysis-result-queue \
-  --message-body '{"upload_id":"'"$UPL_ID"'","analysis_result":"OK","risk_score":10,"findings":["safe"],"timestamp":'"$(date +%s)"'000,"processing_service_id":"analyzer-v1"}'
+  --message-body '{"diagram_id":"'"$UPL_ID"'","status":"SCANNED_OK"}'
 echo "Mensagem SQS enviada"
 
 # 5) Aguardar processamento e verificar status final

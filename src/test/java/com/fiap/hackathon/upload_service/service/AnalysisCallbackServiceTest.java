@@ -264,6 +264,76 @@ class AnalysisCallbackServiceTest {
             .contains("analyzer-v2.1");
     }
 
+    @Test
+    void shouldApplyDiagramStatusFromQueue_whenValidStatus() {
+        UUID diagramId = UUID.randomUUID();
+        Upload upload = createUploadWithStatus(diagramId, UploadStatus.PENDING);
+
+        when(uploadRepository.findById(diagramId)).thenReturn(Optional.of(upload));
+        when(uploadRepository.save(any(Upload.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        Upload result = service.applyDiagramStatusFromQueue(diagramId, "scanned_ok", "sqs-listener");
+
+        assertThat(result.getStatus()).isEqualTo(UploadStatus.SCANNED_OK);
+        assertThat(result.getCompletedAt()).isNotNull();
+        verify(uploadRepository).save(argThat(u -> u.getStatus() == UploadStatus.SCANNED_OK));
+        verify(auditEventPublisher).publishEvent(
+                eq(AuditEventPublisher.EventType.ANALYSIS_CALLBACK_RECEIVED),
+                eq(upload.getUploaderId()),
+                eq("sqs-listener"),
+                any(),
+                eq(AuditEventPublisher.ActionResult.SUCCESS),
+                any()
+        );
+    }
+
+    @Test
+    void shouldApplyDiagramStatusFromQueue_withoutCompletedAt_whenNonFinalStatus() {
+        UUID diagramId = UUID.randomUUID();
+        Upload upload = createUploadWithStatus(diagramId, UploadStatus.PENDING);
+        upload.setCompletedAt(null);
+
+        when(uploadRepository.findById(diagramId)).thenReturn(Optional.of(upload));
+        when(uploadRepository.save(any(Upload.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        Upload result = service.applyDiagramStatusFromQueue(diagramId, "COMPLETED", "sqs-listener");
+
+        assertThat(result.getStatus()).isEqualTo(UploadStatus.COMPLETED);
+        assertThat(result.getCompletedAt()).isNull();
+    }
+
+    @Test
+    void shouldThrowWhenDiagramStatusInvalid() {
+        UUID diagramId = UUID.randomUUID();
+        Upload upload = createUploadWithStatus(diagramId, UploadStatus.PENDING);
+        when(uploadRepository.findById(diagramId)).thenReturn(Optional.of(upload));
+
+        assertThatThrownBy(() -> service.applyDiagramStatusFromQueue(diagramId, "NOT_A_STATUS", "sqs-listener"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Invalid upload status");
+        verify(uploadRepository, never()).save(any());
+    }
+
+    @Test
+    void shouldThrowWhenDiagramUploadNotFound() {
+        UUID diagramId = UUID.randomUUID();
+        when(uploadRepository.findById(diagramId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.applyDiagramStatusFromQueue(diagramId, "SCANNED_OK", "sqs-listener"))
+                .isInstanceOf(AnalysisCallbackService.UploadNotFoundException.class);
+    }
+
+    @Test
+    void shouldThrowWhenDiagramUploadAlreadyFinal() {
+        UUID diagramId = UUID.randomUUID();
+        Upload upload = createUploadWithStatus(diagramId, UploadStatus.SCANNED_OK);
+        when(uploadRepository.findById(diagramId)).thenReturn(Optional.of(upload));
+
+        assertThatThrownBy(() -> service.applyDiagramStatusFromQueue(diagramId, "QUARANTINED", "sqs-listener"))
+                .isInstanceOf(AnalysisCallbackService.UploadConflictException.class);
+        verify(uploadRepository, never()).save(any());
+    }
+
     private Upload createUploadWithStatus(UUID uploadId, UploadStatus status) {
         Upload upload = new Upload();
         upload.setId(uploadId);
