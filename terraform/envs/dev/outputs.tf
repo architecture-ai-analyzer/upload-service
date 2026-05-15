@@ -60,3 +60,8 @@ output "k8s_service_account_name" {
   description = "Kubernetes service account name"
   value       = kubernetes_service_account.upload_service.metadata[0].name
 }
+
+output "loadbalancer_hostname" {
+  description = "Hostname do Load Balancer"
+  value       = kubernetes_service.upload_service.status[0].load_balancer[0].ingress[0].hostname
+}
