@@ -29,20 +29,18 @@ Configuration class for SQS listener behavior:
 - Batch size
 - Long-polling wait time
 
-### 2. **AnalysisResultMessage** (`adapter/dto/`)
+### 2. **DiagramStatusMessage** (`adapter/dto/`)
 
-DTO representing the message format published by the processing service:
+DTO representing the minimal message format published by the processing service:
 
 ```json
 {
-  "upload_id": "uuid",
-  "analysis_result": "OK|QUARANTINED|INCONCLUSIVE",
-  "risk_score": 0-100,
-  "findings": ["array of findings"],
-  "timestamp": epoch_ms,
-  "processing_service_id": "service-name"
+  "diagram_id": "uuid",
+  "status": "PENDING|COMPLETED|SCANNED_OK|QUARANTINED|ANALYSIS_INVALID|ANALYSIS_REVIEW_REQUIRED"
 }
 ```
+
+(`diagram_id` matches the upload row id; `status` must match a [`UploadStatus`](src/main/java/com/fiap/hackathon/upload_service/domain/UploadStatus.java) enum name.)
 
 ### 3. **AnalysisResultSqsListener** (`infra/aws/`)
 
@@ -50,8 +48,7 @@ Scheduled service that:
 
 - Polls the result queue at regular intervals (configurable)
 - Deserializes and validates messages
-- Converts to internal `AnalysisCallbackRequest` format
-- Delegates to existing `AnalysisCallbackService` for processing
+- Delegates to `AnalysisCallbackService.applyDiagramStatusFromQueue` for processing
 - Handles errors gracefully (messages not deleted on failure, will retry)
 - Emits audit events for all operations
 - Deletes messages after successful processing
@@ -258,7 +255,7 @@ mvn test -Dtest=AnalysisResultSqsListenerTest
 
 - `AnalysisResultSqsListener.java` - Main listener service
 - `SqsResultListenerProperties.java` - Configuration properties
-- `AnalysisResultMessage.java` - Message DTO
+- `DiagramStatusMessage.java` - Message DTO
 - `AnalysisResultSqsListenerTest.java` - Test suite
 - `SQS_RESULT_CONSUMER.md` - Detailed documentation
 

@@ -1,14 +1,12 @@
 package com.fiap.hackathon.upload_service.infra.aws;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fiap.hackathon.upload_service.adapter.dto.AnalysisCallbackRequest;
-import com.fiap.hackathon.upload_service.adapter.dto.AnalysisResultMessage;
+import com.fiap.hackathon.upload_service.adapter.dto.DiagramStatusMessage;
 import com.fiap.hackathon.upload_service.config.SqsResultListenerProperties;
 import com.fiap.hackathon.upload_service.infra.audit.AuditEventPublisher;
 import com.fiap.hackathon.upload_service.service.AnalysisCallbackService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import software.amazon.awssdk.services.sqs.SqsClient;
@@ -18,10 +16,10 @@ import software.amazon.awssdk.services.sqs.model.ReceiveMessageRequest;
 import software.amazon.awssdk.services.sqs.model.ReceiveMessageResponse;
 
 import java.util.List;
+import java.util.UUID;
 
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 class AnalysisResultSqsListenerTest {
@@ -44,7 +42,7 @@ class AnalysisResultSqsListenerTest {
     void setUp() {
         MockitoAnnotations.openMocks(this);
         objectMapper = new ObjectMapper();
-        
+
         properties = new SqsResultListenerProperties();
         properties.setEnabled(true);
         properties.setQueueUrl(queueUrl);
@@ -62,17 +60,13 @@ class AnalysisResultSqsListenerTest {
     }
 
     @Test
-    void shouldProcessMessageWhenAnalysisResultIsOk() throws Exception {
-        String uploadId = "00000000-0000-0000-0000-000000000001";
-        AnalysisResultMessage resultMessage = new AnalysisResultMessage();
-        resultMessage.setUploadId(uploadId);
-        resultMessage.setAnalysisResult(AnalysisResultMessage.AnalysisResult.OK);
-        resultMessage.setRiskScore(15);
-        resultMessage.setFindings(List.of("low_risk"));
-        resultMessage.setTimestamp(System.currentTimeMillis());
-        resultMessage.setProcessingServiceId("analyzer-service-1");
+    void shouldProcessMessageWhenStatusIsScannedOk() throws Exception {
+        UUID diagramId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        DiagramStatusMessage payload = new DiagramStatusMessage();
+        payload.setDiagramId(diagramId);
+        payload.setStatus("SCANNED_OK");
 
-        String messageBody = objectMapper.writeValueAsString(resultMessage);
+        String messageBody = objectMapper.writeValueAsString(payload);
         Message message = Message.builder()
                 .messageId("msg-123")
                 .body(messageBody)
@@ -87,33 +81,26 @@ class AnalysisResultSqsListenerTest {
 
         listener.pollResultQueue();
 
-        verify(analysisCallbackService).processAnalysisResult(
-                argThat(req -> 
-                    req.getUploadId().equals(uploadId) &&
-                    req.getAnalysisResult() == AnalysisCallbackRequest.AnalysisResult.OK &&
-                    req.getRiskScore() == 15
-                ),
+        verify(analysisCallbackService).applyDiagramStatusFromQueue(
+                eq(diagramId),
+                eq("SCANNED_OK"),
                 eq("sqs-listener")
         );
 
-        verify(sqsClient).deleteMessage(argThat((DeleteMessageRequest req) -> 
+        verify(sqsClient).deleteMessage(argThat((DeleteMessageRequest req) ->
                 req.queueUrl().equals(queueUrl) &&
-                req.receiptHandle().equals("receipt-handle-123")
+                        req.receiptHandle().equals("receipt-handle-123")
         ));
     }
 
     @Test
-    void shouldProcessMessageWhenAnalysisResultIsQuarantined() throws Exception {
-        String uploadId = "00000000-0000-0000-0000-000000000002";
-        AnalysisResultMessage resultMessage = new AnalysisResultMessage();
-        resultMessage.setUploadId(uploadId);
-        resultMessage.setAnalysisResult(AnalysisResultMessage.AnalysisResult.QUARANTINED);
-        resultMessage.setRiskScore(90);
-        resultMessage.setFindings(List.of("malware_detected", "suspicious_behavior"));
-        resultMessage.setTimestamp(System.currentTimeMillis());
-        resultMessage.setProcessingServiceId("analyzer-service-1");
+    void shouldProcessMessageWhenStatusIsQuarantined() throws Exception {
+        UUID diagramId = UUID.fromString("00000000-0000-0000-0000-000000000002");
+        DiagramStatusMessage payload = new DiagramStatusMessage();
+        payload.setDiagramId(diagramId);
+        payload.setStatus("QUARANTINED");
 
-        String messageBody = objectMapper.writeValueAsString(resultMessage);
+        String messageBody = objectMapper.writeValueAsString(payload);
         Message message = Message.builder()
                 .messageId("msg-456")
                 .body(messageBody)
@@ -128,12 +115,9 @@ class AnalysisResultSqsListenerTest {
 
         listener.pollResultQueue();
 
-        verify(analysisCallbackService).processAnalysisResult(
-                argThat(req -> 
-                    req.getUploadId().equals(uploadId) &&
-                    req.getAnalysisResult() == AnalysisCallbackRequest.AnalysisResult.QUARANTINED &&
-                    req.getRiskScore() == 90
-                ),
+        verify(analysisCallbackService).applyDiagramStatusFromQueue(
+                eq(diagramId),
+                eq("QUARANTINED"),
                 eq("sqs-listener")
         );
 
@@ -141,16 +125,13 @@ class AnalysisResultSqsListenerTest {
     }
 
     @Test
-    void shouldProcessMessageWhenAnalysisResultIsInconclusive() throws Exception {
-        String uploadId = "00000000-0000-0000-0000-000000000003";
-        AnalysisResultMessage resultMessage = new AnalysisResultMessage();
-        resultMessage.setUploadId(uploadId);
-        resultMessage.setAnalysisResult(AnalysisResultMessage.AnalysisResult.INCONCLUSIVE);
-        resultMessage.setRiskScore(50);
-        resultMessage.setFindings(List.of("inconclusive_findings"));
-        resultMessage.setTimestamp(System.currentTimeMillis());
+    void shouldProcessMessageWhenStatusIsAnalysisReviewRequired() throws Exception {
+        UUID diagramId = UUID.fromString("00000000-0000-0000-0000-000000000003");
+        DiagramStatusMessage payload = new DiagramStatusMessage();
+        payload.setDiagramId(diagramId);
+        payload.setStatus("ANALYSIS_REVIEW_REQUIRED");
 
-        String messageBody = objectMapper.writeValueAsString(resultMessage);
+        String messageBody = objectMapper.writeValueAsString(payload);
         Message message = Message.builder()
                 .messageId("msg-789")
                 .body(messageBody)
@@ -165,11 +146,9 @@ class AnalysisResultSqsListenerTest {
 
         listener.pollResultQueue();
 
-        verify(analysisCallbackService).processAnalysisResult(
-                argThat(req -> 
-                    req.getUploadId().equals(uploadId) &&
-                    req.getAnalysisResult() == AnalysisCallbackRequest.AnalysisResult.INCONCLUSIVE
-                ),
+        verify(analysisCallbackService).applyDiagramStatusFromQueue(
+                eq(diagramId),
+                eq("ANALYSIS_REVIEW_REQUIRED"),
                 eq("sqs-listener")
         );
 
@@ -177,15 +156,36 @@ class AnalysisResultSqsListenerTest {
     }
 
     @Test
-    void shouldNotDeleteMessageWhenProcessingFails() throws Exception {
-        String uploadId = "00000000-0000-0000-0000-000000000004";
-        AnalysisResultMessage resultMessage = new AnalysisResultMessage();
-        resultMessage.setUploadId(uploadId);
-        resultMessage.setAnalysisResult(AnalysisResultMessage.AnalysisResult.OK);
-        resultMessage.setRiskScore(20);
-        resultMessage.setTimestamp(System.currentTimeMillis());
+    void shouldAcceptCamelCaseDiagramId() throws Exception {
+        UUID diagramId = UUID.fromString("00000000-0000-0000-0000-000000000099");
+        String messageBody = "{\"diagramId\":\"" + diagramId + "\",\"status\":\"SCANNED_OK\"}";
+        Message message = Message.builder()
+                .messageId("msg-camel")
+                .body(messageBody)
+                .receiptHandle("receipt-camel")
+                .build();
 
-        String messageBody = objectMapper.writeValueAsString(resultMessage);
+        when(sqsClient.receiveMessage(any(ReceiveMessageRequest.class))).thenReturn(
+                ReceiveMessageResponse.builder().messages(message).build());
+
+        listener.pollResultQueue();
+
+        verify(analysisCallbackService).applyDiagramStatusFromQueue(
+                eq(diagramId),
+                eq("SCANNED_OK"),
+                eq("sqs-listener")
+        );
+        verify(sqsClient).deleteMessage(any(DeleteMessageRequest.class));
+    }
+
+    @Test
+    void shouldNotDeleteMessageWhenProcessingFails() throws Exception {
+        UUID diagramId = UUID.fromString("00000000-0000-0000-0000-000000000004");
+        DiagramStatusMessage payload = new DiagramStatusMessage();
+        payload.setDiagramId(diagramId);
+        payload.setStatus("SCANNED_OK");
+
+        String messageBody = objectMapper.writeValueAsString(payload);
         Message message = Message.builder()
                 .messageId("msg-error")
                 .body(messageBody)
@@ -199,11 +199,11 @@ class AnalysisResultSqsListenerTest {
         when(sqsClient.receiveMessage(any(ReceiveMessageRequest.class))).thenReturn(response);
         doThrow(new AnalysisCallbackService.UploadNotFoundException("UPLOAD_NOT_FOUND", "Upload not found"))
                 .when(analysisCallbackService)
-                .processAnalysisResult(any(), eq("sqs-listener"));
+                .applyDiagramStatusFromQueue(any(), any(), eq("sqs-listener"));
 
         listener.pollResultQueue();
 
-        verify(analysisCallbackService).processAnalysisResult(any(), eq("sqs-listener"));
+        verify(analysisCallbackService).applyDiagramStatusFromQueue(any(), any(), eq("sqs-listener"));
         verify(sqsClient, never()).deleteMessage(any(DeleteMessageRequest.class));
         verify(auditEventPublisher).publishEvent(
                 eq(AuditEventPublisher.EventType.SQS_PUBLISH_FAILURE),
@@ -243,29 +243,24 @@ class AnalysisResultSqsListenerTest {
 
         listener.pollResultQueue();
 
-        verify(analysisCallbackService, never()).processAnalysisResult(any(), any());
+        verify(analysisCallbackService, never()).applyDiagramStatusFromQueue(any(), any(), any());
         verify(sqsClient, never()).deleteMessage(any(DeleteMessageRequest.class));
     }
 
     @Test
     void shouldProcessMultipleMessagesInBatch() throws Exception {
+        UUID id1 = UUID.fromString("00000000-0000-0000-0000-000000000011");
+        UUID id2 = UUID.fromString("00000000-0000-0000-0000-000000000012");
+
         Message msg1 = Message.builder()
                 .messageId("msg-1")
-                .body(objectMapper.writeValueAsString(createResultMessage(
-                        "00000000-0000-0000-0000-000000000011",
-                        AnalysisResultMessage.AnalysisResult.OK,
-                        20
-                )))
+                .body(objectMapper.writeValueAsString(diagramPayload(id1, "SCANNED_OK")))
                 .receiptHandle("receipt-1")
                 .build();
 
         Message msg2 = Message.builder()
                 .messageId("msg-2")
-                .body(objectMapper.writeValueAsString(createResultMessage(
-                        "00000000-0000-0000-0000-000000000012",
-                        AnalysisResultMessage.AnalysisResult.QUARANTINED,
-                        85
-                )))
+                .body(objectMapper.writeValueAsString(diagramPayload(id2, "QUARANTINED")))
                 .receiptHandle("receipt-2")
                 .build();
 
@@ -277,7 +272,7 @@ class AnalysisResultSqsListenerTest {
 
         listener.pollResultQueue();
 
-        verify(analysisCallbackService, times(2)).processAnalysisResult(any(), eq("sqs-listener"));
+        verify(analysisCallbackService, times(2)).applyDiagramStatusFromQueue(any(), any(), eq("sqs-listener"));
         verify(sqsClient, times(2)).deleteMessage(any(DeleteMessageRequest.class));
     }
 
@@ -297,7 +292,7 @@ class AnalysisResultSqsListenerTest {
 
         listener.pollResultQueue();
 
-        verify(analysisCallbackService, never()).processAnalysisResult(any(), any());
+        verify(analysisCallbackService, never()).applyDiagramStatusFromQueue(any(), any(), any());
         verify(sqsClient, never()).deleteMessage(any(DeleteMessageRequest.class));
         verify(auditEventPublisher).publishEvent(
                 eq(AuditEventPublisher.EventType.SQS_PUBLISH_FAILURE),
@@ -310,14 +305,8 @@ class AnalysisResultSqsListenerTest {
     }
 
     @Test
-    void shouldHandleMissingUploadIdInMessage() throws Exception {
-        AnalysisResultMessage resultMessage = new AnalysisResultMessage();
-        resultMessage.setUploadId(null); // Invalid
-        resultMessage.setAnalysisResult(AnalysisResultMessage.AnalysisResult.OK);
-        resultMessage.setRiskScore(20);
-        resultMessage.setTimestamp(System.currentTimeMillis());
-
-        String messageBody = objectMapper.writeValueAsString(resultMessage);
+    void shouldHandleMissingDiagramIdInMessage() throws Exception {
+        String messageBody = "{\"status\":\"SCANNED_OK\"}";
         Message message = Message.builder()
                 .messageId("msg-no-id")
                 .body(messageBody)
@@ -332,7 +321,7 @@ class AnalysisResultSqsListenerTest {
 
         listener.pollResultQueue();
 
-        verify(analysisCallbackService, never()).processAnalysisResult(any(), any());
+        verify(analysisCallbackService, never()).applyDiagramStatusFromQueue(any(), any(), any());
         verify(sqsClient, never()).deleteMessage(any(DeleteMessageRequest.class));
         verify(auditEventPublisher).publishEvent(
                 eq(AuditEventPublisher.EventType.SQS_PUBLISH_FAILURE),
@@ -344,12 +333,37 @@ class AnalysisResultSqsListenerTest {
         );
     }
 
-    private AnalysisResultMessage createResultMessage(String uploadId, AnalysisResultMessage.AnalysisResult result, int riskScore) {
-        AnalysisResultMessage msg = new AnalysisResultMessage();
-        msg.setUploadId(uploadId);
-        msg.setAnalysisResult(result);
-        msg.setRiskScore(riskScore);
-        msg.setTimestamp(System.currentTimeMillis());
-        return msg;
+    @Test
+    void shouldHandleInvalidStatusString() throws Exception {
+        UUID diagramId = UUID.fromString("00000000-0000-0000-0000-000000000020");
+        String messageBody = objectMapper.writeValueAsString(diagramPayload(diagramId, "NOT_A_REAL_STATUS"));
+        Message message = Message.builder()
+                .messageId("msg-bad-status")
+                .body(messageBody)
+                .receiptHandle("receipt-bad")
+                .build();
+
+        when(sqsClient.receiveMessage(any(ReceiveMessageRequest.class))).thenReturn(
+                ReceiveMessageResponse.builder().messages(message).build());
+
+        listener.pollResultQueue();
+
+        verify(analysisCallbackService).applyDiagramStatusFromQueue(eq(diagramId), eq("NOT_A_REAL_STATUS"), eq("sqs-listener"));
+        verify(sqsClient, never()).deleteMessage(any(DeleteMessageRequest.class));
+        verify(auditEventPublisher).publishEvent(
+                eq(AuditEventPublisher.EventType.SQS_PUBLISH_FAILURE),
+                any(),
+                any(),
+                any(),
+                eq(AuditEventPublisher.ActionResult.FAILURE),
+                any()
+        );
+    }
+
+    private DiagramStatusMessage diagramPayload(UUID diagramId, String status) {
+        DiagramStatusMessage m = new DiagramStatusMessage();
+        m.setDiagramId(diagramId);
+        m.setStatus(status);
+        return m;
     }
 }

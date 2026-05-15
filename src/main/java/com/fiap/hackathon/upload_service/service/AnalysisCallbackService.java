@@ -88,6 +88,71 @@ public class AnalysisCallbackService {
         return updated;
     }
 
+    private UploadStatus parseUploadStatus(String status) {
+        try {
+            return UploadStatus.valueOf(status.trim().toUpperCase());
+        } catch (IllegalArgumentException ex) {
+            throw new IllegalArgumentException("Invalid upload status: " + status, ex);
+        }
+    }
+
+    /**
+     * Applies an explicit {@link UploadStatus} from the SQS diagram-status message (diagram id = upload id).
+     * {@code completedAt} is set only when the new status is a terminal analysis state.
+     */
+    @Transactional
+    public Upload applyDiagramStatusFromQueue(UUID diagramId, String status, String source) {
+        UploadStatus newStatus = parseUploadStatus(status);
+
+        Optional<Upload> uploadOpt = uploadRepository.findById(diagramId);
+        if (uploadOpt.isEmpty()) {
+            auditEventPublisher.publishEvent(
+                    AuditEventPublisher.EventType.ANALYSIS_CALLBACK_RECEIVED,
+                    null,
+                    source,
+                    ANALYSIS_RESULT_ACTION,
+                    AuditEventPublisher.ActionResult.DENIED,
+                    "Upload not found: " + diagramId
+            );
+            throw new UploadNotFoundException("UPLOAD_NOT_FOUND", "Upload not found for id " + diagramId);
+        }
+
+        Upload upload = uploadOpt.get();
+
+        if (isFinalStatus(upload.getStatus())) {
+            auditEventPublisher.publishEvent(
+                    AuditEventPublisher.EventType.ANALYSIS_CALLBACK_RECEIVED,
+                    upload.getUploaderId(),
+                    source,
+                    ANALYSIS_RESULT_ACTION,
+                    AuditEventPublisher.ActionResult.DENIED,
+                    "Upload already in final state: " + upload.getStatus() + ". Message ignored to prevent replay processing."
+            );
+            throw new UploadConflictException(
+                    "UPLOAD_ALREADY_ANALYZED",
+                    "Upload is already in final state: " + upload.getStatus()
+            );
+        }
+
+        upload.setStatus(newStatus);
+        if (isFinalStatus(newStatus)) {
+            upload.setCompletedAt(OffsetDateTime.now());
+        }
+
+        Upload updated = uploadRepository.save(upload);
+
+        auditEventPublisher.publishEvent(
+                AuditEventPublisher.EventType.ANALYSIS_CALLBACK_RECEIVED,
+                upload.getUploaderId(),
+                source,
+                ANALYSIS_RESULT_ACTION,
+                AuditEventPublisher.ActionResult.SUCCESS,
+                String.format("Diagram status update from queue. New status: %s", newStatus)
+        );
+
+        return updated;
+    }
+
     private UploadStatus mapAnalysisResultToStatus(AnalysisCallbackRequest.AnalysisResult result) {
         return switch (result) {
             case OK -> UploadStatus.SCANNED_OK;

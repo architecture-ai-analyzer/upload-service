@@ -79,39 +79,25 @@ APP_SQS_RESULT_LISTENER_WAIT_TIME_SECONDS=20
 
 ## Message Format
 
-The processing service must publish messages to the result queue in the following JSON format:
+The processing service must publish messages to the result queue as JSON with `diagram_id` (same value as the upload id) and `status` (a [`UploadStatus`](../src/main/java/com/fiap/hackathon/upload_service/domain/UploadStatus.java) enum name):
 
 ```json
 {
-  "upload_id": "00000000-0000-0000-0000-000000000001",
-  "analysis_result": "OK",
-  "risk_score": 15,
-  "findings": ["component_mismatch", "low_risk"],
-  "timestamp": 1712750400000,
-  "processing_service_id": "analyzer-service-v1",
-  "request_id": "req-12345"
+  "diagram_id": "00000000-0000-0000-0000-000000000001",
+  "status": "SCANNED_OK"
 }
 ```
 
+CamelCase `diagramId` is also accepted for deserialization.
+
 ### Message Fields
 
-| Field                   | Type                                | Required | Description                                        |
-| ----------------------- | ----------------------------------- | -------- | -------------------------------------------------- |
-| `upload_id`             | String (UUID)                       | Yes      | Upload identifier that matches the original upload |
-| `analysis_result`       | Enum: OK, QUARANTINED, INCONCLUSIVE | Yes      | Result of the analysis                             |
-| `risk_score`            | Integer (0-100)                     | Yes      | Risk assessment score                              |
-| `findings`              | Array of Strings                    | No       | List of findings/issues detected                   |
-| `timestamp`             | Long (epoch ms)                     | Yes      | When the analysis completed                        |
-| `processing_service_id` | String                              | No       | Identifier of the processing service               |
-| `request_id`            | String                              | No       | Request tracking ID for correlation                |
+| Field         | Type            | Required | Description                                                                 |
+| ------------- | --------------- | -------- | --------------------------------------------------------------------------- |
+| `diagram_id`  | String (UUID)   | Yes      | Upload id (`Upload.id`) to update                                          |
+| `status`      | String          | Yes      | Target status: `PENDING`, `COMPLETED`, `SCANNED_OK`, `QUARANTINED`, `ANALYSIS_INVALID`, `ANALYSIS_REVIEW_REQUIRED` (case-insensitive) |
 
-### Analysis Result Mapping
-
-| Processing Service Result | Upload Status              |
-| ------------------------- | -------------------------- |
-| `OK`                      | `SCANNED_OK`               |
-| `QUARANTINED`             | `QUARANTINED`              |
-| `INCONCLUSIVE`            | `ANALYSIS_REVIEW_REQUIRED` |
+`completed_at` on the upload is set only when the new status is a terminal analysis state (`SCANNED_OK`, `QUARANTINED`, `ANALYSIS_INVALID`, `ANALYSIS_REVIEW_REQUIRED`).
 
 ## Message Processing
 
@@ -125,13 +111,13 @@ The processing service must publish messages to the result queue in the followin
 ### Message Handling
 
 1. **Receive**: Listener polls the queue at regular intervals
-2. **Deserialize**: Message JSON is deserialized to `AnalysisResultMessage` DTO
-3. **Validate**: Presence and format validation via Bean Validation
+2. **Deserialize**: Message JSON is deserialized to `DiagramStatusMessage` (`diagram_id`, `status`)
+3. **Validate**: `diagram_id` and non-blank `status` required
 4. **Process**:
-   - Upload is located by ID
-   - Status is updated based on analysis result
-   - Idempotency check: rejects if upload already in final state (409 Conflict)
-   - Audit event is emitted with full result details
+   - Upload is loaded by id (`diagram_id`)
+   - `status` string is parsed to `UploadStatus` and persisted
+   - Idempotency: rejects if upload already in a terminal analysis state (`UploadConflictException`)
+   - Audit event is emitted on success or denial
 5. **Delete**: Message is deleted from queue on successful processing
 6. **Retry**: On failure, message is NOT deleted and will be retried
 
@@ -140,7 +126,8 @@ The processing service must publish messages to the result queue in the followin
 | Error Scenario                       | Behavior                                                                             |
 | ------------------------------------ | ------------------------------------------------------------------------------------ |
 | Invalid JSON                         | Message retained, audit event logged, next poll tries again after visibility timeout |
-| Missing uploadId                     | Message retained, audit event logged, next poll tries again                          |
+| Missing `diagram_id` or `status`   | Message retained, audit event logged, next poll tries again                          |
+| Invalid `status` (not an enum name) | Message retained, audit event logged, next poll tries again                        |
 | Upload not found                     | Message retained, audit event logged, may need manual cleanup                        |
 | Concurrent processing (409 conflict) | Message deleted (idempotent), audit event logged                                     |
 | SQS connectivity error               | Polling fails gracefully, next interval retries                                      |
