@@ -33,3 +33,74 @@ variable "aws_secret_access_key" {
   type        = string
   sensitive   = true
 }
+
+variable "aws_region" {
+  description = "AWS region"
+  type        = string
+  default     = "us-east-2"
+}
+
+variable "s3_bucket_name" {
+  description = "S3 bucket name"
+  type        = string
+}
+
+variable "aws_account_id" {
+  description = "AWS account ID"
+  type        = string
+  sensitive   = true
+}
+
+variable "upload_queue_name" {
+  description = "SQS upload queue name"
+  type        = string
+  default     = "upload-queue"
+}
+
+variable "status_update_queue_name" {
+  description = "SQS status update queue name"
+  type        = string
+  default     = "status-update-queue"
+}
+
+variable "spring_profile" {
+  description = "Spring profiles active"
+  type        = string
+  default     = "dev"
+}
+
+variable "hibernate_ddl_auto" {
+  description = "Hibernate DDL auto setting"
+  type        = string
+  default     = "update"
+}
+
+variable "flyway_enabled" {
+  description = "Enable Flyway database migrations"
+  type        = string
+  default     = "false"
+}
+
+variable "sqs_result_listener_enabled" {
+  description = "Enable SQS result listener"
+  type        = string
+  default     = "true"
+}
+
+variable "sqs_result_listener_poll_interval_seconds" {
+  description = "SQS result listener poll interval in seconds"
+  type        = number
+  default     = 5
+}
+
+variable "sqs_result_listener_max_messages" {
+  description = "SQS result listener max messages per poll"
+  type        = number
+  default     = 10
+}
+
+variable "sqs_result_listener_wait_time_seconds" {
+  description = "SQS result listener wait time in seconds"
+  type        = number
+  default     = 5
+}
