@@ -62,6 +62,8 @@ output "k8s_service_account_name" {
 }
 
 output "loadbalancer_hostname" {
-  description = "Hostname do Load Balancer"
-  value       = kubernetes_service.upload_service.status[0].load_balancer[0].ingress[0].hostname
+  value = try(
+    kubernetes_service.upload_service.status[0].load_balancer[0].ingress[0].hostname,
+    ""
+  )
 }
