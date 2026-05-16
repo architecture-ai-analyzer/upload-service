@@ -26,7 +26,8 @@ Exemplo de `metadata`:
   "filename": "resultado.pdf",
   "contentType": "application/pdf",
   "projectId": "11111111-1111-1111-1111-111111111111",
-  "uploaderId": "user-123"
+  "uploaderId": "user-123",
+  "templateId": "template-executivo"
 }
 ```
 
