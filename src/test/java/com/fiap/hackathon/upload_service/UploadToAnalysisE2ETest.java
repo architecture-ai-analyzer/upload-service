@@ -36,8 +36,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  * End-to-end integration test covering the full analysis flow:
  *
  * 1. Create project
- * 2. Upload file → stored in S3, status = COMPLETED, event published to upload-queue
- * 3. Publish analysis result to analysis-result-queue (simulating external analyzer)
+ * 2. Upload file → stored in S3, status = PENDING, event published to upload-queue
+ * 3. Publish diagram status to analysis-result-queue (simulating external analyzer)
  * 4. Listener polls queue and transitions upload status to SCANNED_OK / QUARANTINED / ANALYSIS_REVIEW_REQUIRED
  * 5. GET /v1/uploads/{id} confirms the final status
  */
@@ -130,7 +130,7 @@ public class UploadToAnalysisE2ETest {
 
         sendAnalysisResult(uploadId, "OK", 5, List.of("no_threats_detected"));
 
-        String finalStatus = pollUntilStatusChanges(uploadId, "COMPLETED", 10);
+        String finalStatus = pollUntilStatusChanges(uploadId, "PENDING", 10);
         assertThat(finalStatus).isEqualTo("SCANNED_OK");
     }
 
@@ -140,7 +140,7 @@ public class UploadToAnalysisE2ETest {
 
         sendAnalysisResult(uploadId, "QUARANTINED", 95, List.of("malware_detected", "suspicious_macro"));
 
-        String finalStatus = pollUntilStatusChanges(uploadId, "COMPLETED", 10);
+        String finalStatus = pollUntilStatusChanges(uploadId, "PENDING", 10);
         assertThat(finalStatus).isEqualTo("QUARANTINED");
     }
 
@@ -150,7 +150,7 @@ public class UploadToAnalysisE2ETest {
 
         sendAnalysisResult(uploadId, "INCONCLUSIVE", 50, List.of("ambiguous_content"));
 
-        String finalStatus = pollUntilStatusChanges(uploadId, "COMPLETED", 10);
+        String finalStatus = pollUntilStatusChanges(uploadId, "PENDING", 10);
         assertThat(finalStatus).isEqualTo("ANALYSIS_REVIEW_REQUIRED");
     }
 
@@ -160,7 +160,7 @@ public class UploadToAnalysisE2ETest {
 
         sendAnalysisResult(uploadId, "OK", 0, List.of("clean"));
 
-        String finalStatus = pollUntilStatusChanges(uploadId, "COMPLETED", 10);
+        String finalStatus = pollUntilStatusChanges(uploadId, "PENDING", 10);
         assertThat(finalStatus).isEqualTo("SCANNED_OK");
     }
 
@@ -217,17 +217,19 @@ public class UploadToAnalysisE2ETest {
     }
 
     /**
-     * Publishes an analysis result message to the analysis-result-queue,
-     * mirroring what an external processing service would send.
+     * Publishes a diagram status message to the analysis-result-queue
+     * ({@code diagram_id} = upload id, {@code status} = {@link com.fiap.hackathon.upload_service.domain.UploadStatus} name).
      */
     private void sendAnalysisResult(String uploadId, String result, int riskScore, List<String> findings) throws Exception {
+        String status = switch (result) {
+            case "OK" -> "SCANNED_OK";
+            case "QUARANTINED" -> "QUARANTINED";
+            case "INCONCLUSIVE" -> "ANALYSIS_REVIEW_REQUIRED";
+            default -> throw new IllegalArgumentException("Unknown analysis result shorthand: " + result);
+        };
         Map<String, Object> msg = Map.of(
-                "upload_id", uploadId,
-                "analysis_result", result,
-                "risk_score", riskScore,
-                "findings", findings,
-                "timestamp", System.currentTimeMillis(),
-                "processing_service_id", "e2e-analyzer"
+                "diagram_id", uploadId,
+                "status", status
         );
         sqsClient.sendMessage(SendMessageRequest.builder()
                 .queueUrl(analysisResultQueueUrl)

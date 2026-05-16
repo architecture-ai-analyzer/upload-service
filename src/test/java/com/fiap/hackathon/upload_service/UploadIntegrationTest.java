@@ -301,6 +301,45 @@ public class UploadIntegrationTest {
         assertThat(String.valueOf(errorBody.get("detail"))).contains(unknownUploadId);
     }
 
+    @Test
+    public void getProjects_returnsPersistedProjects() throws Exception {
+        HttpResponse<String> created = postJson("/v1/projects", Map.of(
+                "name", "Projeto Listagem",
+                "description", "Projeto para teste de listagem",
+                "ownerId", "owner-list"
+        ));
+        assertThat(created.statusCode()).isEqualTo(HttpStatus.OK.value());
+
+        HttpResponse<String> listResp = getJson("/v1/projects");
+        assertThat(listResp.statusCode()).isEqualTo(HttpStatus.OK.value());
+
+        Object[] projects = objectMapper.readValue(listResp.body(), Object[].class);
+        assertThat(projects.length).isGreaterThan(0);
+        assertThat(listResp.body()).contains("Projeto Listagem");
+        assertThat(listResp.body()).contains("owner-list");
+    }
+
+    @Test
+    public void getProjectById_returnsCreatedProject() throws Exception {
+        HttpResponse<String> created = postJson("/v1/projects", Map.of(
+                "name", "Projeto ById",
+                "description", "Projeto para teste por id",
+                "ownerId", "owner-by-id"
+        ));
+        assertThat(created.statusCode()).isEqualTo(HttpStatus.OK.value());
+
+        Map<String, Object> createdBody = objectMapper.readValue(created.body(), Map.class);
+        String projectId = String.valueOf(createdBody.get("id"));
+
+        HttpResponse<String> getResp = getJson("/v1/projects/" + projectId);
+        assertThat(getResp.statusCode()).isEqualTo(HttpStatus.OK.value());
+
+        Map<String, Object> found = objectMapper.readValue(getResp.body(), Map.class);
+        assertThat(found.get("id")).isEqualTo(projectId);
+        assertThat(found.get("name")).isEqualTo("Projeto ById");
+        assertThat(found.get("ownerId")).isEqualTo("owner-by-id");
+    }
+
     private HttpResponse<String> postJson(String path, Map<String, Object> body) throws Exception {
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(new URI("http://localhost:" + port + path))
