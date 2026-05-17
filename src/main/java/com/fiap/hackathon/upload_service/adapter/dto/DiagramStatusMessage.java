@@ -1,13 +1,15 @@
 package com.fiap.hackathon.upload_service.adapter.dto;
 
 import com.fasterxml.jackson.annotation.JsonAlias;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.util.UUID;
 
 /**
- * Minimal SQS payload from the processing service: diagram (upload) id and target status.
+ * Minimal SQS payload from the processing service: diagram (upload) id, status, and optional timestamp.
  */
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class DiagramStatusMessage {
 
     @JsonProperty("diagram_id")
@@ -16,6 +18,9 @@ public class DiagramStatusMessage {
 
     @JsonProperty("status")
     private String status;
+
+    @JsonProperty("timestamp")
+    private String timestamp;
 
     public DiagramStatusMessage() {
     }
@@ -34,5 +39,13 @@ public class DiagramStatusMessage {
 
     public void setStatus(String status) {
         this.status = status;
+    }
+
+    public String getTimestamp() {
+        return timestamp;
+    }
+
+    public void setTimestamp(String timestamp) {
+        this.timestamp = timestamp;
     }
 }

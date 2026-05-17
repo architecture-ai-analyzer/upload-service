@@ -18,6 +18,7 @@ import software.amazon.awssdk.services.sqs.model.ReceiveMessageResponse;
 import java.util.List;
 import java.util.UUID;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
@@ -176,6 +177,33 @@ class AnalysisResultSqsListenerTest {
                 eq("sqs-listener")
         );
         verify(sqsClient).deleteMessage(any(DeleteMessageRequest.class));
+    }
+
+    @Test
+    void shouldDeserializeTimestampFieldAndProcessMessage() throws Exception {
+        UUID diagramId = UUID.fromString("00000000-0000-0000-0000-000000000099");
+        String timestamp = "2026-05-17T05:55:47.724460856Z";
+        String messageBody = "{\"diagramId\":\"" + diagramId + "\",\"status\":\"EM_PROCESSAMENTO\",\"timestamp\":\"" + timestamp + "\"}";
+        Message message = Message.builder()
+                .messageId("msg-timestamp")
+                .body(messageBody)
+                .receiptHandle("receipt-timestamp")
+                .build();
+
+        when(sqsClient.receiveMessage(any(ReceiveMessageRequest.class))).thenReturn(
+                ReceiveMessageResponse.builder().messages(message).build());
+
+        listener.pollResultQueue();
+
+        verify(analysisCallbackService).applyDiagramStatusFromQueue(
+                eq(diagramId),
+                eq("EM_PROCESSAMENTO"),
+                eq("sqs-listener")
+        );
+        verify(sqsClient).deleteMessage(any(DeleteMessageRequest.class));
+
+        DiagramStatusMessage payload = objectMapper.readValue(messageBody, DiagramStatusMessage.class);
+        assertEquals(timestamp, payload.getTimestamp());
     }
 
     @Test
@@ -345,6 +373,9 @@ class AnalysisResultSqsListenerTest {
 
         when(sqsClient.receiveMessage(any(ReceiveMessageRequest.class))).thenReturn(
                 ReceiveMessageResponse.builder().messages(message).build());
+        doThrow(new IllegalArgumentException("Invalid analysis status"))
+                .when(analysisCallbackService)
+                .applyDiagramStatusFromQueue(eq(diagramId), eq("NOT_A_REAL_STATUS"), eq("sqs-listener"));
 
         listener.pollResultQueue();
 
