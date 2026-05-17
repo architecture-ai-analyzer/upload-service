@@ -5,10 +5,17 @@ resource "kubernetes_service" "upload_service" {
     labels = {
       app = "upload-service"
     }
+
+    annotations = {
+      "service.beta.kubernetes.io/aws-load-balancer-type"            = "nlb"
+      "service.beta.kubernetes.io/aws-load-balancer-nlb-target-type" = "instance"
+      "service.beta.kubernetes.io/aws-load-balancer-scheme"          = "internal"
+      "service.beta.kubernetes.io/aws-load-balancer-manage-backend-security-group-rules" = "true"
+    }
   }
 
   spec {
-    type = "ClusterIP"
+    type = "LoadBalancer"
 
     selector = {
       app = "upload-service"
@@ -17,11 +24,17 @@ resource "kubernetes_service" "upload_service" {
     port {
       name        = "http"
       protocol    = "TCP"
-      port        = 8080
+      port        = 80
       target_port = 8080
     }
 
     session_affinity = "None"
+  }
+
+  wait_for_load_balancer = true
+
+  timeouts {
+    create = "10m"
   }
 
   depends_on = [
