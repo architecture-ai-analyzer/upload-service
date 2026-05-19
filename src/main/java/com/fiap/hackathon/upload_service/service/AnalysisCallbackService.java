@@ -90,7 +90,7 @@ public class AnalysisCallbackService {
 
     private UploadStatus parseUploadStatus(String status) {
         try {
-            return UploadStatus.valueOf(status.trim().toUpperCase());
+            return UploadStatus.fromString(status);
         } catch (IllegalArgumentException ex) {
             throw new IllegalArgumentException("Invalid upload status: " + status, ex);
         }
@@ -155,17 +155,14 @@ public class AnalysisCallbackService {
 
     private UploadStatus mapAnalysisResultToStatus(AnalysisCallbackRequest.AnalysisResult result) {
         return switch (result) {
-            case OK -> UploadStatus.SCANNED_OK;
-            case QUARANTINED -> UploadStatus.QUARANTINED;
-            case INCONCLUSIVE -> UploadStatus.ANALYSIS_REVIEW_REQUIRED;
+            case OK -> UploadStatus.ANALYZED;
+            case QUARANTINED -> UploadStatus.ANALYZED;
+            case INCONCLUSIVE -> UploadStatus.ERROR;
         };
     }
 
     private boolean isFinalStatus(UploadStatus status) {
-        return status == UploadStatus.SCANNED_OK ||
-               status == UploadStatus.QUARANTINED ||
-               status == UploadStatus.ANALYSIS_INVALID ||
-               status == UploadStatus.ANALYSIS_REVIEW_REQUIRED;
+        return status == UploadStatus.ANALYZED || status == UploadStatus.ERROR;
     }
 
     public static class UploadNotFoundException extends RuntimeException {

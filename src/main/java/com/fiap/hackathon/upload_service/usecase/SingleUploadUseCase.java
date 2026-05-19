@@ -10,6 +10,7 @@ import com.fiap.hackathon.upload_service.domain.Upload;
 import com.fiap.hackathon.upload_service.domain.UploadStatus;
 import com.fiap.hackathon.upload_service.infra.aws.S3ClientWrapper;
 import com.fiap.hackathon.upload_service.infra.aws.SqsEventPublisher;
+import com.fiap.hackathon.upload_service.infra.aws.AiAnalysisPayload;
 import com.fiap.hackathon.upload_service.infra.audit.AuditEventPublisher;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.Authentication;
@@ -202,7 +203,7 @@ public class SingleUploadUseCase {
             }
         }
         
-        upload.setStatus(UploadStatus.PENDING);
+        upload.setStatus(UploadStatus.RECEIVED);
         upload.setCreatedAt(OffsetDateTime.now());
         upload.setCompletedAt(OffsetDateTime.now());
         
@@ -210,16 +211,14 @@ public class SingleUploadUseCase {
 
         // Publish SQS event with retry + DLQ fallback
         if (queueUrl != null && !queueUrl.isBlank()) {
-            var payload = new UploadEvent(
-                    uploadId.toString(),
-                    s3Key,
-                    fileContentType,
-                    fileSize,
-                    request.getUploaderId(),
-                    request.getProjectId()
-            );
             try {
-                String body = objectMapper.writeValueAsString(payload);
+                AiAnalysisPayload aiPayload = new AiAnalysisPayload(
+                        1,
+                        new AiAnalysisPayload.Source("s3", bucketName, s3Key),
+                        uploadId.toString(),
+                        UUID.randomUUID().toString() // using a new UUID as correlationId for simplicity
+                );
+                String body = objectMapper.writeValueAsString(aiPayload);
                 sqsEventPublisher.publishUploadEvent(queueUrl, body, uploadId.toString(), request.getUploaderId());
             } catch (JsonProcessingException e) {
                 throw new RuntimeException("Failed to serialize upload event: " + e.getMessage(), e);
@@ -291,21 +290,4 @@ public class SingleUploadUseCase {
         return String.format("%s/projects/%s/%s/%s.%s", bucketPrefix, proj, user, uploadId, ext);
     }
 
-    static class UploadEvent {
-        public String eventId;
-        public String s3Key;
-        public String contentType;
-        public Long sizeBytes;
-        public String uploaderId;
-        public String projectId;
-
-        public UploadEvent(String eventId, String s3Key, String contentType, Long sizeBytes, String uploaderId, String projectId) {
-            this.eventId = eventId;
-            this.s3Key = s3Key;
-            this.contentType = contentType;
-            this.sizeBytes = sizeBytes;
-            this.uploaderId = uploaderId;
-            this.projectId = projectId;
-        }
-    }
 }
