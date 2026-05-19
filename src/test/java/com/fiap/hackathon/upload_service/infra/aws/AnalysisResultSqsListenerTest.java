@@ -65,7 +65,7 @@ class AnalysisResultSqsListenerTest {
         UUID diagramId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         DiagramStatusMessage payload = new DiagramStatusMessage();
         payload.setDiagramId(diagramId);
-        payload.setStatus("SCANNED_OK");
+        payload.setStatus("ANALYZED");
 
         String messageBody = objectMapper.writeValueAsString(payload);
         Message message = Message.builder()
@@ -84,7 +84,7 @@ class AnalysisResultSqsListenerTest {
 
         verify(analysisCallbackService).applyDiagramStatusFromQueue(
                 eq(diagramId),
-                eq("SCANNED_OK"),
+                eq("ANALYZED"),
                 eq("sqs-listener")
         );
 
@@ -99,7 +99,7 @@ class AnalysisResultSqsListenerTest {
         UUID diagramId = UUID.fromString("00000000-0000-0000-0000-000000000002");
         DiagramStatusMessage payload = new DiagramStatusMessage();
         payload.setDiagramId(diagramId);
-        payload.setStatus("QUARANTINED");
+        payload.setStatus("ANALYZED");
 
         String messageBody = objectMapper.writeValueAsString(payload);
         Message message = Message.builder()
@@ -118,7 +118,7 @@ class AnalysisResultSqsListenerTest {
 
         verify(analysisCallbackService).applyDiagramStatusFromQueue(
                 eq(diagramId),
-                eq("QUARANTINED"),
+                eq("ANALYZED"),
                 eq("sqs-listener")
         );
 
@@ -130,7 +130,7 @@ class AnalysisResultSqsListenerTest {
         UUID diagramId = UUID.fromString("00000000-0000-0000-0000-000000000003");
         DiagramStatusMessage payload = new DiagramStatusMessage();
         payload.setDiagramId(diagramId);
-        payload.setStatus("ANALYSIS_REVIEW_REQUIRED");
+        payload.setStatus("ANALYZED");
 
         String messageBody = objectMapper.writeValueAsString(payload);
         Message message = Message.builder()
@@ -149,7 +149,7 @@ class AnalysisResultSqsListenerTest {
 
         verify(analysisCallbackService).applyDiagramStatusFromQueue(
                 eq(diagramId),
-                eq("ANALYSIS_REVIEW_REQUIRED"),
+                eq("ANALYZED"),
                 eq("sqs-listener")
         );
 
@@ -159,7 +159,7 @@ class AnalysisResultSqsListenerTest {
     @Test
     void shouldAcceptCamelCaseDiagramId() throws Exception {
         UUID diagramId = UUID.fromString("00000000-0000-0000-0000-000000000099");
-        String messageBody = "{\"diagramId\":\"" + diagramId + "\",\"status\":\"SCANNED_OK\"}";
+        String messageBody = "{\"diagramId\":\"" + diagramId + "\",\"status\":\"ANALYZED\"}";
         Message message = Message.builder()
                 .messageId("msg-camel")
                 .body(messageBody)
@@ -173,7 +173,7 @@ class AnalysisResultSqsListenerTest {
 
         verify(analysisCallbackService).applyDiagramStatusFromQueue(
                 eq(diagramId),
-                eq("SCANNED_OK"),
+                eq("ANALYZED"),
                 eq("sqs-listener")
         );
         verify(sqsClient).deleteMessage(any(DeleteMessageRequest.class));
@@ -183,7 +183,7 @@ class AnalysisResultSqsListenerTest {
     void shouldDeserializeTimestampFieldAndProcessMessage() throws Exception {
         UUID diagramId = UUID.fromString("00000000-0000-0000-0000-000000000099");
         String timestamp = "2026-05-17T05:55:47.724460856Z";
-        String messageBody = "{\"diagramId\":\"" + diagramId + "\",\"status\":\"EM_PROCESSAMENTO\",\"timestamp\":\"" + timestamp + "\"}";
+        String messageBody = "{\"diagramId\":\"" + diagramId + "\",\"status\":\"PROCESSING\",\"timestamp\":\"" + timestamp + "\"}";
         Message message = Message.builder()
                 .messageId("msg-timestamp")
                 .body(messageBody)
@@ -197,7 +197,7 @@ class AnalysisResultSqsListenerTest {
 
         verify(analysisCallbackService).applyDiagramStatusFromQueue(
                 eq(diagramId),
-                eq("EM_PROCESSAMENTO"),
+                eq("PROCESSING"),
                 eq("sqs-listener")
         );
         verify(sqsClient).deleteMessage(any(DeleteMessageRequest.class));
@@ -211,7 +211,7 @@ class AnalysisResultSqsListenerTest {
         UUID diagramId = UUID.fromString("00000000-0000-0000-0000-000000000004");
         DiagramStatusMessage payload = new DiagramStatusMessage();
         payload.setDiagramId(diagramId);
-        payload.setStatus("SCANNED_OK");
+        payload.setStatus("ANALYZED");
 
         String messageBody = objectMapper.writeValueAsString(payload);
         Message message = Message.builder()
@@ -282,13 +282,13 @@ class AnalysisResultSqsListenerTest {
 
         Message msg1 = Message.builder()
                 .messageId("msg-1")
-                .body(objectMapper.writeValueAsString(diagramPayload(id1, "SCANNED_OK")))
+                .body(objectMapper.writeValueAsString(diagramPayload(id1, "ANALYZED")))
                 .receiptHandle("receipt-1")
                 .build();
 
         Message msg2 = Message.builder()
                 .messageId("msg-2")
-                .body(objectMapper.writeValueAsString(diagramPayload(id2, "QUARANTINED")))
+                .body(objectMapper.writeValueAsString(diagramPayload(id2, "ANALYZED")))
                 .receiptHandle("receipt-2")
                 .build();
 
@@ -334,7 +334,7 @@ class AnalysisResultSqsListenerTest {
 
     @Test
     void shouldHandleMissingDiagramIdInMessage() throws Exception {
-        String messageBody = "{\"status\":\"SCANNED_OK\"}";
+        String messageBody = "{\"status\":\"ANALYZED\"}";
         Message message = Message.builder()
                 .messageId("msg-no-id")
                 .body(messageBody)
