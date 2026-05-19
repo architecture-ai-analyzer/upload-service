@@ -45,7 +45,7 @@ public class UploadService {
                 // ignore invalid uuid; leave null
             }
         }
-        up.setStatus(UploadStatus.COMPLETED);
+        up.setStatus(UploadStatus.PROCESSING);
         up.setCompletedAt(OffsetDateTime.now());
         if (up.getCreatedAt() == null) up.setCreatedAt(OffsetDateTime.now());
         uploadRepository.save(up);
