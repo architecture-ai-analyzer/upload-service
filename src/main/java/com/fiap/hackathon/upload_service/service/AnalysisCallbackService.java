@@ -114,7 +114,11 @@ public class AnalysisCallbackService {
                     AuditEventPublisher.ActionResult.DENIED,
                     "Upload not found: " + diagramId
             );
-            throw new UploadNotFoundException("UPLOAD_NOT_FOUND", "Upload not found for id " + diagramId);
+            throw new UploadNotFoundException(
+                    "UPLOAD_NOT_FOUND",
+                    "Upload not found for id "
+                            + diagramId
+                            + ". Status messages must use the same UUID as job_id (upload id) from the analysis input payload.");
         }
 
         Upload upload = uploadOpt.get();
@@ -155,14 +159,14 @@ public class AnalysisCallbackService {
 
     private UploadStatus mapAnalysisResultToStatus(AnalysisCallbackRequest.AnalysisResult result) {
         return switch (result) {
-            case OK -> UploadStatus.ANALYZED;
-            case QUARANTINED -> UploadStatus.ANALYZED;
-            case INCONCLUSIVE -> UploadStatus.ERROR;
+            case OK -> UploadStatus.ANALISADO;
+            case QUARANTINED -> UploadStatus.ANALISADO;
+            case INCONCLUSIVE -> UploadStatus.ERRO;
         };
     }
 
     private boolean isFinalStatus(UploadStatus status) {
-        return status == UploadStatus.ANALYZED || status == UploadStatus.ERROR;
+        return status == UploadStatus.ANALISADO || status == UploadStatus.ERRO;
     }
 
     public static class UploadNotFoundException extends RuntimeException {

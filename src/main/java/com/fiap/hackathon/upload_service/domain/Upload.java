@@ -23,7 +23,7 @@ public class Upload {
 
     private java.util.UUID projectId;
 
-    @Enumerated(EnumType.STRING)
+    @Convert(converter = UploadStatusJpaConverter.class)
     private UploadStatus status;
 
     private OffsetDateTime createdAt;

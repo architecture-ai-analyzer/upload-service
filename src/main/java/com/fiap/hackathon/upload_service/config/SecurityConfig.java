@@ -59,7 +59,7 @@ public class SecurityConfig {
                             ).permitAll()
                             .requestMatchers(HttpMethod.POST, "/v1/uploads", "/v1/projects").hasAuthority("SCOPE_upload:write")
                             .requestMatchers(HttpMethod.GET, "/v1/projects/**").hasAnyAuthority("SCOPE_upload:read", "SCOPE_upload:write")
-                            .requestMatchers(HttpMethod.GET, "/v1/uploads/**").hasAnyAuthority("SCOPE_upload:read", "SCOPE_upload:write")
+                            .requestMatchers(HttpMethod.GET, "/v1/uploads", "/v1/uploads/**").hasAnyAuthority("SCOPE_upload:read", "SCOPE_upload:write")
                             .requestMatchers(HttpMethod.GET, "/v1/audit/**").hasAnyAuthority("SCOPE_audit:read", "SCOPE_admin")
                             .anyRequest().authenticated()
                     );

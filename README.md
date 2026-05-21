@@ -370,6 +370,8 @@ mvn clean install
 
 #### 2.2 Configurar Ambiente (desenvolvimento local)
 
+> **S3 `405 Method Not Allowed`:** se `CLOUD_AWS_ENDPOINT_S3` (ou o default em `application-dev.properties`) apontar para a **URL do Console AWS** (`console.aws.amazon.com/.../buckets/...`), o SDK tenta `PutObject` em uma página HTML e recebe 405. Use endpoint **vazio** para AWS real (`s3.<região>.amazonaws.com` implícito) ou **`http://localhost:4566`** para LocalStack.
+
 Editar `upload-service/src/main/resources/application-dev.properties`:
 
 ```properties

@@ -24,6 +24,7 @@ import java.time.OffsetDateTime;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.logging.Logger;
 
 @Service
 public class SingleUploadUseCase {
@@ -203,11 +204,15 @@ public class SingleUploadUseCase {
             }
         }
         
-        upload.setStatus(UploadStatus.RECEIVED);
+        upload.setStatus(UploadStatus.RECEBIDO);
         upload.setCreatedAt(OffsetDateTime.now());
         upload.setCompletedAt(OffsetDateTime.now());
         
         uploadRepository.save(upload);
+
+        System.out.println("ID SALVO ----------------");
+        System.out.println(upload.getId());
+        System.out.println("----------------");
 
         // Publish SQS event with retry + DLQ fallback
         if (queueUrl != null && !queueUrl.isBlank()) {
@@ -215,9 +220,14 @@ public class SingleUploadUseCase {
                 AiAnalysisPayload aiPayload = new AiAnalysisPayload(
                         1,
                         new AiAnalysisPayload.Source("s3", bucketName, s3Key),
-                        uploadId.toString(),
+                        upload.getId().toString(),
                         UUID.randomUUID().toString() // using a new UUID as correlationId for simplicity
                 );
+
+                System.out.println("ID SQS ----------------");
+                System.out.println(aiPayload.jobId());
+                System.out.println("----------------");
+
                 String body = objectMapper.writeValueAsString(aiPayload);
                 sqsEventPublisher.publishUploadEvent(queueUrl, body, uploadId.toString(), request.getUploaderId());
             } catch (JsonProcessingException e) {
