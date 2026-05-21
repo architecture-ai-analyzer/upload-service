@@ -57,10 +57,7 @@ public class SecurityConfig {
                                     "/swagger-ui/**",
                                     "/v3/api-docs/**"
                             ).permitAll()
-                            .requestMatchers(HttpMethod.POST, "/v1/uploads", "/v1/projects").hasAuthority("SCOPE_upload:write")
-                            .requestMatchers(HttpMethod.GET, "/v1/projects/**").hasAnyAuthority("SCOPE_upload:read", "SCOPE_upload:write")
-                            .requestMatchers(HttpMethod.GET, "/v1/uploads", "/v1/uploads/**").hasAnyAuthority("SCOPE_upload:read", "SCOPE_upload:write")
-                            .requestMatchers(HttpMethod.GET, "/v1/audit/**").hasAnyAuthority("SCOPE_audit:read", "SCOPE_admin")
+                            .requestMatchers("/v1/**").permitAll()
                             .anyRequest().authenticated()
                     );
         } else {
@@ -90,7 +87,7 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOrigins(corsProperties.getAllowedOrigins());
+        config.setAllowedOriginPatterns(corsProperties.getAllowedOrigins());
         config.setAllowedMethods(corsProperties.getAllowedMethods());
         config.setAllowedHeaders(corsProperties.getAllowedHeaders());
         config.setAllowCredentials(corsProperties.isAllowCredentials());
