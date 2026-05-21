@@ -19,6 +19,9 @@ public class CorsProperties {
         // Default origins for development
         this.allowedOrigins.add("http://localhost:5173");
         this.allowedOrigins.add("http://localhost:5174");
+
+        // CloudFront dynamic domains
+        this.allowedOrigins.add("https://*.cloudfront.net");
     }
 
     public List<String> getAllowedOrigins() {

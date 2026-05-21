@@ -18,7 +18,7 @@ resource "kubernetes_config_map" "upload_service" {
 
     # AWS Configuration
     CLOUD_AWS_REGION           = var.aws_region
-    CLOUD_AWS_ENDPOINT_S3      = "https://${var.aws_region}.console.aws.amazon.com/s3/buckets/${var.s3_bucket_name}"
+    CLOUD_AWS_ENDPOINT_S3      = ""
     CLOUD_AWS_ENDPOINT_SQS     = "https://sqs.${var.aws_region}.amazonaws.com"
 
     # S3 Configuration
