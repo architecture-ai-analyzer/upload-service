@@ -8,33 +8,30 @@ import java.text.Normalizer;
 import java.util.Locale;
 
 /**
- * Simplified upload lifecycle statuses. Values are stored in English.
- * This enum accepts Portuguese string representations and maps them to the
- * corresponding English values when deserialized.
+ * Estados do ciclo de vida do upload. Os identificadores do enum coincidem com o formato canônico
+ * (REST JSON, coluna no banco, campo {@code status} em mensagens SQS):
+ * {@code RECEBIDO}, {@code EM_PROCESSAMENTO}, {@code ANALISADO}, {@code ERRO}.
+ * <p>
+ * A desserialização aceita variações com/sem acentos e com espaços no lugar de underscore
+ * (ex.: {@code Em processamento} → {@code EM_PROCESSAMENTO}).
  */
 public enum UploadStatus {
-    /** Received by the service. */
-    RECEIVED("RECEBIDO"),
-    /** Currently being processed by analysis service. */
-    PROCESSING("EM_PROCESSAMENTO"),
-    /** Analysis finished (success or quarantine decisions encoded elsewhere). */
-    ANALYZED("ANALISADO"),
-    /** There was an error processing the upload or analysis. */
-    ERROR("ERRO");
+    /** Recebido pelo serviço. */
+    RECEBIDO,
+    /** Em processamento pelo serviço de análise. */
+    EM_PROCESSAMENTO,
+    /** Análise concluída (detalhes de quarentena etc. ficam em outros campos). */
+    ANALISADO,
+    /** Erro no processamento ou na análise. */
+    ERRO;
 
-    private final String portugueseKey;
-
-    UploadStatus(String portugueseKey) {
-        this.portugueseKey = portugueseKey;
-    }
-
-    public String portuguese() {
-        return portugueseKey;
+    @Override
+    public String toString() {
+        return name();
     }
 
     @JsonValue
     public String toJson() {
-        // Serialize as English enum name
         return name();
     }
 
@@ -43,33 +40,27 @@ public enum UploadStatus {
         if (value == null) return null;
         String v = value.trim();
         if (v.isEmpty()) return null;
-        // Try direct match by enum name (case-insensitive)
-        try {
-            return UploadStatus.valueOf(v.toUpperCase(Locale.ROOT));
-        } catch (IllegalArgumentException ignored) {
-            LoggerFactory.getLogger(UploadStatus.class).debug("Value '{}' did not match enum name, trying Portuguese mapping", value);
-        }
 
-        // Normalize input: remove accents, convert to upper case and replace spaces with underscore
-        String normalized = normalize(v)
-                .toUpperCase(Locale.ROOT)
+        String upper = v.toUpperCase(Locale.ROOT);
+
+        String normalized = normalize(upper)
                 .replaceAll("\\s+", "_")
                 .replaceAll("[^A-Z0-9_]", "");
 
         for (UploadStatus s : values()) {
-            if (s.portugueseKey.equals(normalized)) {
+            if (s.name().equals(normalized)) {
                 return s;
             }
         }
 
-        // Accept also inputs that match portugueseKey without underscores (e.g. EM PROCESSAMENTO)
         String compact = normalized.replaceAll("_+", "_");
         for (UploadStatus s : values()) {
-            if (s.portugueseKey.equals(compact) || s.portugueseKey.replace("_", "").equals(compact.replace("_", ""))) {
+            if (s.name().equals(compact) || s.name().replace("_", "").equals(compact.replace("_", ""))) {
                 return s;
             }
         }
 
+        LoggerFactory.getLogger(UploadStatus.class).debug("Unknown UploadStatus: {}", value);
         throw new IllegalArgumentException("Unknown UploadStatus: " + value);
     }
 

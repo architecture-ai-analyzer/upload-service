@@ -71,6 +71,9 @@ public class AnalysisResultSqsListener {
 
             ReceiveMessageResponse response = sqsClient.receiveMessage(request);
             List<Message> messages = response.messages();
+            System.out.println("ID SQS ----------------");
+            System.out.println(messages.toString());
+            System.out.println("----------------");
 
             if (messages == null || messages.isEmpty()) {
                 logger.debug("No messages received from analysis result queue");

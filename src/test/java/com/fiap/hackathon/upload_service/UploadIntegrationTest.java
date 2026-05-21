@@ -134,11 +134,11 @@ public class UploadIntegrationTest {
         boolean fileExists = s3client.headObject(HeadObjectRequest.builder().bucket(bucketName).key(s3Key).build()) != null;
         assertThat(fileExists).isTrue();
 
-        // 5) Verify upload status is RECEIVED via GET endpoint
+        // 5) Verify upload status is RECEBIDO via GET endpoint
         HttpResponse<String> statusResp = getJson("/v1/uploads/" + uploadId);
         assertThat(statusResp.statusCode()).isEqualTo(HttpStatus.OK.value());
         Map<String, Object> statusBody = objectMapper.readValue(statusResp.body(), Map.class);
-        assertThat(statusBody.get("status")).isEqualTo("RECEIVED");
+        assertThat(statusBody.get("status")).isEqualTo("RECEBIDO");
     }
 
     @Test

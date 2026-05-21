@@ -53,7 +53,7 @@ upload-service/
 ├── domain/                 # Entidades de negócio
 │   ├── Upload.java
 │   ├── Project.java
-│   └── UploadStatus.java   (PENDING, COMPLETED, SCANNED_OK, QUARANTINED)
+│   └── UploadStatus.java   (RECEBIDO, EM_PROCESSAMENTO, ANALISADO, ERRO)
 │
 ├── usecase/                # Casos de uso (regras de negócio)
 │   ├── SingleUploadUseCase   valida → S3 → persiste → SQS

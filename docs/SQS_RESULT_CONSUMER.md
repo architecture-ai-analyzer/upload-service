@@ -79,12 +79,12 @@ APP_SQS_RESULT_LISTENER_WAIT_TIME_SECONDS=20
 
 ## Message Format
 
-The processing service must publish messages to the result queue as JSON with `diagram_id` (same value as the upload id) and `status` (a [`UploadStatus`](../src/main/java/com/fiap/hackathon/upload_service/domain/UploadStatus.java) enum name):
+The processing service must publish messages to the result queue as JSON with `diagram_id` (same value as the upload id) and `status` (a canonical Portuguese [`UploadStatus`](../src/main/java/com/fiap/hackathon/upload_service/domain/UploadStatus.java) string: `RECEBIDO`, `EM_PROCESSAMENTO`, `ANALISADO`, `ERRO`):
 
 ```json
 {
   "diagram_id": "00000000-0000-0000-0000-000000000001",
-  "status": "SCANNED_OK"
+  "status": "ANALISADO"
 }
 ```
 
@@ -95,9 +95,9 @@ CamelCase `diagramId` is also accepted for deserialization.
 | Field         | Type            | Required | Description                                                                 |
 | ------------- | --------------- | -------- | --------------------------------------------------------------------------- |
 | `diagram_id`  | String (UUID)   | Yes      | Upload id (`Upload.id`) to update                                          |
-| `status`      | String          | Yes      | Target status: `PENDING`, `COMPLETED`, `SCANNED_OK`, `QUARANTINED`, `ANALYSIS_INVALID`, `ANALYSIS_REVIEW_REQUIRED` (case-insensitive) |
+| `status`      | String          | Yes      | Target status: `RECEBIDO`, `EM_PROCESSAMENTO`, `ANALISADO`, `ERRO` (case-insensitive; spaces may be normalized to `_`) |
 
-`completed_at` on the upload is set only when the new status is a terminal analysis state (`SCANNED_OK`, `QUARANTINED`, `ANALYSIS_INVALID`, `ANALYSIS_REVIEW_REQUIRED`).
+`completed_at` on the upload is set only when the new status is terminal (`ANALISADO` or `ERRO`).
 
 ## Message Processing
 
@@ -127,7 +127,7 @@ CamelCase `diagramId` is also accepted for deserialization.
 | ------------------------------------ | ------------------------------------------------------------------------------------ |
 | Invalid JSON                         | Message retained, audit event logged, next poll tries again after visibility timeout |
 | Missing `diagram_id` or `status`   | Message retained, audit event logged, next poll tries again                          |
-| Invalid `status` (not an enum name) | Message retained, audit event logged, next poll tries again                        |
+| Invalid `status` (not a valid `UploadStatus` value) | Message retained, audit event logged, next poll tries again                        |
 | Upload not found                     | Message retained, audit event logged, may need manual cleanup                        |
 | Concurrent processing (409 conflict) | Message deleted (idempotent), audit event logged                                     |
 | SQS connectivity error               | Polling fails gracefully, next interval retries                                      |
@@ -156,7 +156,7 @@ userId: null (system process)
 clientIp: sqs-listener
 action: Analysis result message processing
 actionResult: SUCCESS
-details: Analysis result processed. New status: SCANNED_OK. Risk score: 15. Findings: low_risk. Analysis service: analyzer-service-v1
+details: Analysis result processed. New status: ANALISADO. Risk score: 15. Findings: low_risk. Analysis service: analyzer-service-v1
 ```
 
 ## Monitoring & Observability
