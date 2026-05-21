@@ -16,6 +16,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestPart;
@@ -24,7 +25,9 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.net.URI;
+import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/v1/uploads")
@@ -114,6 +117,12 @@ public class UploadController {
         return ResponseEntity
                 .created(URI.create("/v1/uploads/" + response.getUploadId()))
                 .body(response);
+    }
+
+    @GetMapping(params = "projectId")
+    public ResponseEntity<List<Upload>> listByProject(@RequestParam("projectId") UUID projectId) {
+        List<Upload> uploads = uploadService.listUploadsByProject(projectId);
+        return ResponseEntity.ok(uploads);
     }
 
     @GetMapping("/{uploadId}")

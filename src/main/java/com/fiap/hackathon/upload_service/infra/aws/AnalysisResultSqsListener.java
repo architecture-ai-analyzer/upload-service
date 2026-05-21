@@ -12,6 +12,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import software.amazon.awssdk.services.sqs.SqsClient;
 import software.amazon.awssdk.services.sqs.model.DeleteMessageRequest;
+import software.amazon.awssdk.services.sqs.model.GetQueueUrlRequest;
 import software.amazon.awssdk.services.sqs.model.Message;
 import software.amazon.awssdk.services.sqs.model.ReceiveMessageRequest;
 import software.amazon.awssdk.services.sqs.model.ReceiveMessageResponse;
@@ -60,14 +61,19 @@ public class AnalysisResultSqsListener {
         }
 
         try {
-            ReceiveMessageRequest request = ReceiveMessageRequest.builder()
-                    .queueUrl(properties.getQueueUrl())
+                String resolvedQueueUrl = resolveQueueUrl(properties.getQueueUrl());
+
+                ReceiveMessageRequest request = ReceiveMessageRequest.builder()
+                    .queueUrl(resolvedQueueUrl)
                     .maxNumberOfMessages(properties.getMaxMessages())
                     .waitTimeSeconds(properties.getWaitTimeSeconds())
                     .build();
 
             ReceiveMessageResponse response = sqsClient.receiveMessage(request);
             List<Message> messages = response.messages();
+            System.out.println("ID SQS ----------------");
+            System.out.println(messages.toString());
+            System.out.println("----------------");
 
             if (messages == null || messages.isEmpty()) {
                 logger.debug("No messages received from analysis result queue");
@@ -79,7 +85,7 @@ public class AnalysisResultSqsListener {
             for (Message message : messages) {
                 try {
                     processMessage(message);
-                    deleteMessage(message);
+                    deleteMessage(message, resolvedQueueUrl);
                 } catch (Exception e) {
                     logger.error("Error processing analysis result message: {}", message.messageId(), e);
                     auditEventPublisher.publishEvent(
@@ -133,10 +139,10 @@ public class AnalysisResultSqsListener {
         }
     }
 
-    private void deleteMessage(Message message) {
+    private void deleteMessage(Message message, String queueUrl) {
         try {
             DeleteMessageRequest request = DeleteMessageRequest.builder()
-                    .queueUrl(properties.getQueueUrl())
+                    .queueUrl(queueUrl)
                     .receiptHandle(message.receiptHandle())
                     .build();
 
@@ -144,6 +150,22 @@ public class AnalysisResultSqsListener {
             logger.debug("Deleted processed message: {}", message.messageId());
         } catch (Exception e) {
             logger.error("Error deleting message from queue: {}", message.messageId(), e);
+        }
+    }
+
+    private String resolveQueueUrl(String provided) {
+        if (provided == null) return provided;
+        String p = provided.trim();
+        if (p.isBlank()) return p;
+        // if it's already a URL, return as-is
+        if (p.contains(":")) return p;
+
+        try {
+            GetQueueUrlRequest req = GetQueueUrlRequest.builder().queueName(p).build();
+            return sqsClient.getQueueUrl(req).queueUrl();
+        } catch (Exception e) {
+            logger.warn("Failed to resolve queue name '{}' to URL, leaving as-is: {}", p, e.getMessage());
+            return p;
         }
     }
 }

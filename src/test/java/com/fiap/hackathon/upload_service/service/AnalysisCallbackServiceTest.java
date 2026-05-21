@@ -33,9 +33,9 @@ class AnalysisCallbackServiceTest {
     }
 
     @Test
-    void shouldUpdateStatusToScannedOk_whenAnalysisResultIsOk() {
+    void shouldUpdateStatusToAnalyzed_whenAnalysisResultIsOk() {
         UUID uploadId = UUID.randomUUID();
-        Upload upload = createUploadWithStatus(uploadId, UploadStatus.COMPLETED);
+        Upload upload = createUploadWithStatus(uploadId, UploadStatus.EM_PROCESSAMENTO);
         
         AnalysisCallbackRequest request = new AnalysisCallbackRequest();
         request.setUploadId(uploadId.toString());
@@ -50,10 +50,10 @@ class AnalysisCallbackServiceTest {
 
         Upload result = service.processAnalysisResult(request, clientIp);
 
-        assertThat(result.getStatus()).isEqualTo(UploadStatus.SCANNED_OK);
+        assertThat(result.getStatus()).isEqualTo(UploadStatus.ANALISADO);
         assertThat(result.getCompletedAt()).isNotNull();
         
-        verify(uploadRepository).save(argThat(u -> u.getStatus() == UploadStatus.SCANNED_OK));
+        verify(uploadRepository).save(argThat(u -> u.getStatus() == UploadStatus.ANALISADO));
         verify(auditEventPublisher).publishEvent(
             eq(AuditEventPublisher.EventType.ANALYSIS_CALLBACK_RECEIVED),
             eq(upload.getUploaderId()),
@@ -65,9 +65,9 @@ class AnalysisCallbackServiceTest {
     }
 
     @Test
-    void shouldUpdateStatusToQuarantined_whenAnalysisResultIsQuarantined() {
+    void shouldUpdateStatusToAnalyzed_whenAnalysisResultIsQuarantined() {
         UUID uploadId = UUID.randomUUID();
-        Upload upload = createUploadWithStatus(uploadId, UploadStatus.COMPLETED);
+        Upload upload = createUploadWithStatus(uploadId, UploadStatus.EM_PROCESSAMENTO);
         
         AnalysisCallbackRequest request = new AnalysisCallbackRequest();
         request.setUploadId(uploadId.toString());
@@ -81,14 +81,14 @@ class AnalysisCallbackServiceTest {
 
         Upload result = service.processAnalysisResult(request, clientIp);
 
-        assertThat(result.getStatus()).isEqualTo(UploadStatus.QUARANTINED);
-        verify(uploadRepository).save(argThat(u -> u.getStatus() == UploadStatus.QUARANTINED));
+        assertThat(result.getStatus()).isEqualTo(UploadStatus.ANALISADO);
+        verify(uploadRepository).save(argThat(u -> u.getStatus() == UploadStatus.ANALISADO));
     }
 
     @Test
-    void shouldUpdateStatusToAnalysisReviewRequired_whenAnalysisResultIsInconclusive() {
+    void shouldUpdateStatusToError_whenAnalysisResultIsInconclusive() {
         UUID uploadId = UUID.randomUUID();
-        Upload upload = createUploadWithStatus(uploadId, UploadStatus.COMPLETED);
+        Upload upload = createUploadWithStatus(uploadId, UploadStatus.EM_PROCESSAMENTO);
         
         AnalysisCallbackRequest request = new AnalysisCallbackRequest();
         request.setUploadId(uploadId.toString());
@@ -102,8 +102,8 @@ class AnalysisCallbackServiceTest {
 
         Upload result = service.processAnalysisResult(request, clientIp);
 
-        assertThat(result.getStatus()).isEqualTo(UploadStatus.ANALYSIS_REVIEW_REQUIRED);
-        verify(uploadRepository).save(argThat(u -> u.getStatus() == UploadStatus.ANALYSIS_REVIEW_REQUIRED));
+        assertThat(result.getStatus()).isEqualTo(UploadStatus.ERRO);
+        verify(uploadRepository).save(argThat(u -> u.getStatus() == UploadStatus.ERRO));
     }
 
     @Test
@@ -132,9 +132,9 @@ class AnalysisCallbackServiceTest {
     }
 
     @Test
-    void shouldThrowConflictException_whenUploadAlreadyScannedOk() {
+    void shouldThrowConflictException_whenUploadAlreadyAnalyzed() {
         UUID uploadId = UUID.randomUUID();
-        Upload upload = createUploadWithStatus(uploadId, UploadStatus.SCANNED_OK);
+        Upload upload = createUploadWithStatus(uploadId, UploadStatus.ANALISADO);
         
         AnalysisCallbackRequest request = new AnalysisCallbackRequest();
         request.setUploadId(uploadId.toString());
@@ -152,9 +152,9 @@ class AnalysisCallbackServiceTest {
     }
 
     @Test
-    void shouldThrowConflictException_whenUploadAlreadyQuarantined() {
+    void shouldThrowConflictException_whenUploadAlreadyAnalyzed_quarantined() {
         UUID uploadId = UUID.randomUUID();
-        Upload upload = createUploadWithStatus(uploadId, UploadStatus.QUARANTINED);
+        Upload upload = createUploadWithStatus(uploadId, UploadStatus.ANALISADO);
         
         AnalysisCallbackRequest request = new AnalysisCallbackRequest();
         request.setUploadId(uploadId.toString());
@@ -171,9 +171,9 @@ class AnalysisCallbackServiceTest {
     }
 
     @Test
-    void shouldThrowConflictException_whenUploadAlreadyAnalysisInvalid() {
+    void shouldThrowConflictException_whenUploadAlreadyError() {
         UUID uploadId = UUID.randomUUID();
-        Upload upload = createUploadWithStatus(uploadId, UploadStatus.ANALYSIS_INVALID);
+        Upload upload = createUploadWithStatus(uploadId, UploadStatus.ERRO);
         
         AnalysisCallbackRequest request = new AnalysisCallbackRequest();
         request.setUploadId(uploadId.toString());
@@ -190,9 +190,9 @@ class AnalysisCallbackServiceTest {
     }
 
     @Test
-    void shouldThrowConflictException_whenUploadAlreadyAnalysisReviewRequired() {
+    void shouldThrowConflictException_whenUploadAlreadyError_reviewRequired() {
         UUID uploadId = UUID.randomUUID();
-        Upload upload = createUploadWithStatus(uploadId, UploadStatus.ANALYSIS_REVIEW_REQUIRED);
+        Upload upload = createUploadWithStatus(uploadId, UploadStatus.ERRO);
         
         AnalysisCallbackRequest request = new AnalysisCallbackRequest();
         request.setUploadId(uploadId.toString());
@@ -209,9 +209,9 @@ class AnalysisCallbackServiceTest {
     }
 
     @Test
-    void shouldAllowReprocessing_whenUploadIsCompleted() {
+    void shouldAllowReprocessing_whenUploadIsProcessing() {
         UUID uploadId = UUID.randomUUID();
-        Upload upload = createUploadWithStatus(uploadId, UploadStatus.COMPLETED);
+        Upload upload = createUploadWithStatus(uploadId, UploadStatus.EM_PROCESSAMENTO);
         
         AnalysisCallbackRequest request = new AnalysisCallbackRequest();
         request.setUploadId(uploadId.toString());
@@ -224,14 +224,14 @@ class AnalysisCallbackServiceTest {
 
         Upload result = service.processAnalysisResult(request, clientIp);
 
-        assertThat(result.getStatus()).isEqualTo(UploadStatus.SCANNED_OK);
+        assertThat(result.getStatus()).isEqualTo(UploadStatus.ANALISADO);
         verify(uploadRepository).save(any());
     }
 
     @Test
     void shouldIncludeDetailsInAuditEvent_withFindings() {
         UUID uploadId = UUID.randomUUID();
-        Upload upload = createUploadWithStatus(uploadId, UploadStatus.COMPLETED);
+        Upload upload = createUploadWithStatus(uploadId, UploadStatus.EM_PROCESSAMENTO);
         
         AnalysisCallbackRequest request = new AnalysisCallbackRequest();
         request.setUploadId(uploadId.toString());
@@ -258,7 +258,7 @@ class AnalysisCallbackServiceTest {
 
         String details = detailsCaptor.getValue();
         assertThat(details)
-            .contains("QUARANTINED")
+            .contains("ANALISADO")
             .contains("90")
             .contains("malware_detected")
             .contains("analyzer-v2.1");
@@ -267,16 +267,16 @@ class AnalysisCallbackServiceTest {
     @Test
     void shouldApplyDiagramStatusFromQueue_whenValidStatus() {
         UUID diagramId = UUID.randomUUID();
-        Upload upload = createUploadWithStatus(diagramId, UploadStatus.PENDING);
+        Upload upload = createUploadWithStatus(diagramId, UploadStatus.EM_PROCESSAMENTO);
 
         when(uploadRepository.findById(diagramId)).thenReturn(Optional.of(upload));
         when(uploadRepository.save(any(Upload.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        Upload result = service.applyDiagramStatusFromQueue(diagramId, "scanned_ok", "sqs-listener");
+        Upload result = service.applyDiagramStatusFromQueue(diagramId, "ANALISADO", "sqs-listener");
 
-        assertThat(result.getStatus()).isEqualTo(UploadStatus.SCANNED_OK);
+        assertThat(result.getStatus()).isEqualTo(UploadStatus.ANALISADO);
         assertThat(result.getCompletedAt()).isNotNull();
-        verify(uploadRepository).save(argThat(u -> u.getStatus() == UploadStatus.SCANNED_OK));
+        verify(uploadRepository).save(argThat(u -> u.getStatus() == UploadStatus.ANALISADO));
         verify(auditEventPublisher).publishEvent(
                 eq(AuditEventPublisher.EventType.ANALYSIS_CALLBACK_RECEIVED),
                 eq(upload.getUploaderId()),
@@ -290,22 +290,22 @@ class AnalysisCallbackServiceTest {
     @Test
     void shouldApplyDiagramStatusFromQueue_withoutCompletedAt_whenNonFinalStatus() {
         UUID diagramId = UUID.randomUUID();
-        Upload upload = createUploadWithStatus(diagramId, UploadStatus.PENDING);
+        Upload upload = createUploadWithStatus(diagramId, UploadStatus.EM_PROCESSAMENTO);
         upload.setCompletedAt(null);
 
         when(uploadRepository.findById(diagramId)).thenReturn(Optional.of(upload));
         when(uploadRepository.save(any(Upload.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        Upload result = service.applyDiagramStatusFromQueue(diagramId, "COMPLETED", "sqs-listener");
+        Upload result = service.applyDiagramStatusFromQueue(diagramId, "EM_PROCESSAMENTO", "sqs-listener");
 
-        assertThat(result.getStatus()).isEqualTo(UploadStatus.COMPLETED);
+        assertThat(result.getStatus()).isEqualTo(UploadStatus.EM_PROCESSAMENTO);
         assertThat(result.getCompletedAt()).isNull();
     }
 
     @Test
     void shouldThrowWhenDiagramStatusInvalid() {
         UUID diagramId = UUID.randomUUID();
-        Upload upload = createUploadWithStatus(diagramId, UploadStatus.PENDING);
+        Upload upload = createUploadWithStatus(diagramId, UploadStatus.EM_PROCESSAMENTO);
         when(uploadRepository.findById(diagramId)).thenReturn(Optional.of(upload));
 
         assertThatThrownBy(() -> service.applyDiagramStatusFromQueue(diagramId, "NOT_A_STATUS", "sqs-listener"))
@@ -319,17 +319,17 @@ class AnalysisCallbackServiceTest {
         UUID diagramId = UUID.randomUUID();
         when(uploadRepository.findById(diagramId)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.applyDiagramStatusFromQueue(diagramId, "SCANNED_OK", "sqs-listener"))
+        assertThatThrownBy(() -> service.applyDiagramStatusFromQueue(diagramId, "ANALISADO", "sqs-listener"))
                 .isInstanceOf(AnalysisCallbackService.UploadNotFoundException.class);
     }
 
     @Test
     void shouldThrowWhenDiagramUploadAlreadyFinal() {
         UUID diagramId = UUID.randomUUID();
-        Upload upload = createUploadWithStatus(diagramId, UploadStatus.SCANNED_OK);
+        Upload upload = createUploadWithStatus(diagramId, UploadStatus.ANALISADO);
         when(uploadRepository.findById(diagramId)).thenReturn(Optional.of(upload));
 
-        assertThatThrownBy(() -> service.applyDiagramStatusFromQueue(diagramId, "QUARANTINED", "sqs-listener"))
+        assertThatThrownBy(() -> service.applyDiagramStatusFromQueue(diagramId, "ERRO", "sqs-listener"))
                 .isInstanceOf(AnalysisCallbackService.UploadConflictException.class);
         verify(uploadRepository, never()).save(any());
     }

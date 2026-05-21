@@ -10,6 +10,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -45,7 +46,7 @@ public class UploadService {
                 // ignore invalid uuid; leave null
             }
         }
-        up.setStatus(UploadStatus.COMPLETED);
+        up.setStatus(UploadStatus.EM_PROCESSAMENTO);
         up.setCompletedAt(OffsetDateTime.now());
         if (up.getCreatedAt() == null) up.setCreatedAt(OffsetDateTime.now());
         uploadRepository.save(up);
@@ -65,6 +66,10 @@ public class UploadService {
 
     public Optional<Upload> getUpload(UUID uploadId) {
         return uploadRepository.findById(uploadId);
+    }
+
+    public List<Upload> listUploadsByProject(UUID projectId) {
+        return uploadRepository.findByProjectIdOrderByCreatedAtDesc(projectId);
     }
 
     static class UploadEvent {

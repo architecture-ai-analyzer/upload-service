@@ -53,10 +53,11 @@ public class AwsConfig {
     public S3Client s3Client() {
         var b = S3Client.builder()
                 .region(Region.of(region))
-                .overrideConfiguration(clientOverrideConfiguration())
-                .forcePathStyle(true); // Required for LocalStack and other S3-compatible services
+                .overrideConfiguration(clientOverrideConfiguration());
         if (s3Endpoint != null && !s3Endpoint.isBlank()) {
             b.endpointOverride(URI.create(s3Endpoint));
+            // Path-style required for LocalStack and most S3-compatible endpoints; avoid for default AWS API
+            b.forcePathStyle(true);
         }
         if (accessKey != null && !accessKey.isBlank()) {
             b.credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create(accessKey, secretKey)));

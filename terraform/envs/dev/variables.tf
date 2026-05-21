@@ -19,7 +19,7 @@ variable "rds_password" {
 variable "container_image" {
   description = "Container image for upload-service"
   type        = string
-  default     = "upload-service:latest"
+  default     = "posfiap/upload-service:latest"
 }
 
 variable "aws_access_key_id" {

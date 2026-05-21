@@ -90,7 +90,7 @@ public class AnalysisCallbackService {
 
     private UploadStatus parseUploadStatus(String status) {
         try {
-            return UploadStatus.valueOf(status.trim().toUpperCase());
+            return UploadStatus.fromString(status);
         } catch (IllegalArgumentException ex) {
             throw new IllegalArgumentException("Invalid upload status: " + status, ex);
         }
@@ -114,7 +114,11 @@ public class AnalysisCallbackService {
                     AuditEventPublisher.ActionResult.DENIED,
                     "Upload not found: " + diagramId
             );
-            throw new UploadNotFoundException("UPLOAD_NOT_FOUND", "Upload not found for id " + diagramId);
+            throw new UploadNotFoundException(
+                    "UPLOAD_NOT_FOUND",
+                    "Upload not found for id "
+                            + diagramId
+                            + ". Status messages must use the same UUID as job_id (upload id) from the analysis input payload.");
         }
 
         Upload upload = uploadOpt.get();
@@ -155,17 +159,14 @@ public class AnalysisCallbackService {
 
     private UploadStatus mapAnalysisResultToStatus(AnalysisCallbackRequest.AnalysisResult result) {
         return switch (result) {
-            case OK -> UploadStatus.SCANNED_OK;
-            case QUARANTINED -> UploadStatus.QUARANTINED;
-            case INCONCLUSIVE -> UploadStatus.ANALYSIS_REVIEW_REQUIRED;
+            case OK -> UploadStatus.ANALISADO;
+            case QUARANTINED -> UploadStatus.ANALISADO;
+            case INCONCLUSIVE -> UploadStatus.ERRO;
         };
     }
 
     private boolean isFinalStatus(UploadStatus status) {
-        return status == UploadStatus.SCANNED_OK ||
-               status == UploadStatus.QUARANTINED ||
-               status == UploadStatus.ANALYSIS_INVALID ||
-               status == UploadStatus.ANALYSIS_REVIEW_REQUIRED;
+        return status == UploadStatus.ANALISADO || status == UploadStatus.ERRO;
     }
 
     public static class UploadNotFoundException extends RuntimeException {

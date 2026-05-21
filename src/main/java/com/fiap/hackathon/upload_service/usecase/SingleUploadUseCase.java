@@ -10,6 +10,7 @@ import com.fiap.hackathon.upload_service.domain.Upload;
 import com.fiap.hackathon.upload_service.domain.UploadStatus;
 import com.fiap.hackathon.upload_service.infra.aws.S3ClientWrapper;
 import com.fiap.hackathon.upload_service.infra.aws.SqsEventPublisher;
+import com.fiap.hackathon.upload_service.infra.aws.AiAnalysisPayload;
 import com.fiap.hackathon.upload_service.infra.audit.AuditEventPublisher;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.Authentication;
@@ -23,6 +24,7 @@ import java.time.OffsetDateTime;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.logging.Logger;
 
 @Service
 public class SingleUploadUseCase {
@@ -193,7 +195,6 @@ public class SingleUploadUseCase {
         upload.setContentType(fileContentType);
         upload.setSizeBytes(fileSize);
         upload.setUploaderId(request.getUploaderId());
-        upload.setTemplateId(request.getTemplateId());
         
         if (request.getProjectId() != null && !request.getProjectId().isBlank()) {
             try {
@@ -203,11 +204,15 @@ public class SingleUploadUseCase {
             }
         }
         
-        upload.setStatus(UploadStatus.PENDING);
+        upload.setStatus(UploadStatus.RECEBIDO);
         upload.setCreatedAt(OffsetDateTime.now());
         upload.setCompletedAt(OffsetDateTime.now());
         
         uploadRepository.save(upload);
+
+        System.out.println("ID SALVO ----------------");
+        System.out.println(upload.getId());
+        System.out.println("----------------");
 
         // Publish SQS event with retry + DLQ fallback
         if (queueUrl != null && !queueUrl.isBlank()) {
@@ -217,11 +222,21 @@ public class SingleUploadUseCase {
                     fileContentType,
                     fileSize,
                     request.getUploaderId(),
-                    request.getProjectId(),
-                    request.getTemplateId()
+                    request.getProjectId()
             );
             try {
-                String body = objectMapper.writeValueAsString(payload);
+                AiAnalysisPayload aiPayload = new AiAnalysisPayload(
+                        1,
+                        new AiAnalysisPayload.Source("s3", bucketName, s3Key),
+                        upload.getId().toString(),
+                        UUID.randomUUID().toString() // using a new UUID as correlationId for simplicity
+                );
+
+                System.out.println("ID SQS ----------------");
+                System.out.println(aiPayload.jobId());
+                System.out.println("----------------");
+
+                String body = objectMapper.writeValueAsString(aiPayload);
                 sqsEventPublisher.publishUploadEvent(queueUrl, body, uploadId.toString(), request.getUploaderId());
             } catch (JsonProcessingException e) {
                 throw new RuntimeException("Failed to serialize upload event: " + e.getMessage(), e);
@@ -300,16 +315,14 @@ public class SingleUploadUseCase {
         public Long sizeBytes;
         public String uploaderId;
         public String projectId;
-        public String templateId;
 
-        public UploadEvent(String eventId, String s3Key, String contentType, Long sizeBytes, String uploaderId, String projectId, String templateId) {
+        public UploadEvent(String eventId, String s3Key, String contentType, Long sizeBytes, String uploaderId, String projectId) {
             this.eventId = eventId;
             this.s3Key = s3Key;
             this.contentType = contentType;
             this.sizeBytes = sizeBytes;
             this.uploaderId = uploaderId;
             this.projectId = projectId;
-            this.templateId = templateId;
         }
     }
 }

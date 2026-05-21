@@ -36,11 +36,11 @@ DTO representing the minimal message format published by the processing service:
 ```json
 {
   "diagram_id": "uuid",
-  "status": "PENDING|COMPLETED|SCANNED_OK|QUARANTINED|ANALYSIS_INVALID|ANALYSIS_REVIEW_REQUIRED"
+  "status": "RECEBIDO|EM_PROCESSAMENTO|ANALISADO|ERRO"
 }
 ```
 
-(`diagram_id` matches the upload row id; `status` must match a [`UploadStatus`](src/main/java/com/fiap/hackathon/upload_service/domain/UploadStatus.java) enum name.)
+(`diagram_id` matches the upload row id; `status` must be a canonical Portuguese [`UploadStatus`](src/main/java/com/fiap/hackathon/upload_service/domain/UploadStatus.java) value.)
 
 ### 3. **AnalysisResultSqsListener** (`infra/aws/`)
 

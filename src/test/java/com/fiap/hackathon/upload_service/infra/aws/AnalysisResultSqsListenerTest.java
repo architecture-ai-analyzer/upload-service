@@ -18,6 +18,7 @@ import software.amazon.awssdk.services.sqs.model.ReceiveMessageResponse;
 import java.util.List;
 import java.util.UUID;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
@@ -64,7 +65,7 @@ class AnalysisResultSqsListenerTest {
         UUID diagramId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         DiagramStatusMessage payload = new DiagramStatusMessage();
         payload.setDiagramId(diagramId);
-        payload.setStatus("SCANNED_OK");
+        payload.setStatus("ANALISADO");
 
         String messageBody = objectMapper.writeValueAsString(payload);
         Message message = Message.builder()
@@ -83,7 +84,7 @@ class AnalysisResultSqsListenerTest {
 
         verify(analysisCallbackService).applyDiagramStatusFromQueue(
                 eq(diagramId),
-                eq("SCANNED_OK"),
+                eq("ANALISADO"),
                 eq("sqs-listener")
         );
 
@@ -98,7 +99,7 @@ class AnalysisResultSqsListenerTest {
         UUID diagramId = UUID.fromString("00000000-0000-0000-0000-000000000002");
         DiagramStatusMessage payload = new DiagramStatusMessage();
         payload.setDiagramId(diagramId);
-        payload.setStatus("QUARANTINED");
+        payload.setStatus("ANALISADO");
 
         String messageBody = objectMapper.writeValueAsString(payload);
         Message message = Message.builder()
@@ -117,7 +118,7 @@ class AnalysisResultSqsListenerTest {
 
         verify(analysisCallbackService).applyDiagramStatusFromQueue(
                 eq(diagramId),
-                eq("QUARANTINED"),
+                eq("ANALISADO"),
                 eq("sqs-listener")
         );
 
@@ -129,7 +130,7 @@ class AnalysisResultSqsListenerTest {
         UUID diagramId = UUID.fromString("00000000-0000-0000-0000-000000000003");
         DiagramStatusMessage payload = new DiagramStatusMessage();
         payload.setDiagramId(diagramId);
-        payload.setStatus("ANALYSIS_REVIEW_REQUIRED");
+        payload.setStatus("ANALISADO");
 
         String messageBody = objectMapper.writeValueAsString(payload);
         Message message = Message.builder()
@@ -148,7 +149,7 @@ class AnalysisResultSqsListenerTest {
 
         verify(analysisCallbackService).applyDiagramStatusFromQueue(
                 eq(diagramId),
-                eq("ANALYSIS_REVIEW_REQUIRED"),
+                eq("ANALISADO"),
                 eq("sqs-listener")
         );
 
@@ -158,7 +159,7 @@ class AnalysisResultSqsListenerTest {
     @Test
     void shouldAcceptCamelCaseDiagramId() throws Exception {
         UUID diagramId = UUID.fromString("00000000-0000-0000-0000-000000000099");
-        String messageBody = "{\"diagramId\":\"" + diagramId + "\",\"status\":\"SCANNED_OK\"}";
+        String messageBody = "{\"diagramId\":\"" + diagramId + "\",\"status\":\"ANALISADO\"}";
         Message message = Message.builder()
                 .messageId("msg-camel")
                 .body(messageBody)
@@ -172,10 +173,37 @@ class AnalysisResultSqsListenerTest {
 
         verify(analysisCallbackService).applyDiagramStatusFromQueue(
                 eq(diagramId),
-                eq("SCANNED_OK"),
+                eq("ANALISADO"),
                 eq("sqs-listener")
         );
         verify(sqsClient).deleteMessage(any(DeleteMessageRequest.class));
+    }
+
+    @Test
+    void shouldDeserializeTimestampFieldAndProcessMessage() throws Exception {
+        UUID diagramId = UUID.fromString("00000000-0000-0000-0000-000000000099");
+        String timestamp = "2026-05-17T05:55:47.724460856Z";
+        String messageBody = "{\"diagramId\":\"" + diagramId + "\",\"status\":\"EM_PROCESSAMENTO\",\"timestamp\":\"" + timestamp + "\"}";
+        Message message = Message.builder()
+                .messageId("msg-timestamp")
+                .body(messageBody)
+                .receiptHandle("receipt-timestamp")
+                .build();
+
+        when(sqsClient.receiveMessage(any(ReceiveMessageRequest.class))).thenReturn(
+                ReceiveMessageResponse.builder().messages(message).build());
+
+        listener.pollResultQueue();
+
+        verify(analysisCallbackService).applyDiagramStatusFromQueue(
+                eq(diagramId),
+                eq("EM_PROCESSAMENTO"),
+                eq("sqs-listener")
+        );
+        verify(sqsClient).deleteMessage(any(DeleteMessageRequest.class));
+
+        DiagramStatusMessage payload = objectMapper.readValue(messageBody, DiagramStatusMessage.class);
+        assertEquals(timestamp, payload.getTimestamp());
     }
 
     @Test
@@ -183,7 +211,7 @@ class AnalysisResultSqsListenerTest {
         UUID diagramId = UUID.fromString("00000000-0000-0000-0000-000000000004");
         DiagramStatusMessage payload = new DiagramStatusMessage();
         payload.setDiagramId(diagramId);
-        payload.setStatus("SCANNED_OK");
+        payload.setStatus("ANALISADO");
 
         String messageBody = objectMapper.writeValueAsString(payload);
         Message message = Message.builder()
@@ -254,13 +282,13 @@ class AnalysisResultSqsListenerTest {
 
         Message msg1 = Message.builder()
                 .messageId("msg-1")
-                .body(objectMapper.writeValueAsString(diagramPayload(id1, "SCANNED_OK")))
+                .body(objectMapper.writeValueAsString(diagramPayload(id1, "ANALISADO")))
                 .receiptHandle("receipt-1")
                 .build();
 
         Message msg2 = Message.builder()
                 .messageId("msg-2")
-                .body(objectMapper.writeValueAsString(diagramPayload(id2, "QUARANTINED")))
+                .body(objectMapper.writeValueAsString(diagramPayload(id2, "ANALISADO")))
                 .receiptHandle("receipt-2")
                 .build();
 
@@ -306,7 +334,7 @@ class AnalysisResultSqsListenerTest {
 
     @Test
     void shouldHandleMissingDiagramIdInMessage() throws Exception {
-        String messageBody = "{\"status\":\"SCANNED_OK\"}";
+        String messageBody = "{\"status\":\"ANALISADO\"}";
         Message message = Message.builder()
                 .messageId("msg-no-id")
                 .body(messageBody)
@@ -345,6 +373,9 @@ class AnalysisResultSqsListenerTest {
 
         when(sqsClient.receiveMessage(any(ReceiveMessageRequest.class))).thenReturn(
                 ReceiveMessageResponse.builder().messages(message).build());
+        doThrow(new IllegalArgumentException("Invalid analysis status"))
+                .when(analysisCallbackService)
+                .applyDiagramStatusFromQueue(eq(diagramId), eq("NOT_A_REAL_STATUS"), eq("sqs-listener"));
 
         listener.pollResultQueue();
 
