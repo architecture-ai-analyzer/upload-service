@@ -6,6 +6,7 @@ on:
       - main
       - homologation
       - develop
+      - feature/cicd
   workflow_dispatch:
 
 env:
