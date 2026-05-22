@@ -4,10 +4,12 @@ import com.fiap.hackathon.upload_service.adapter.dto.AnalysisCallbackRequest;
 import com.fiap.hackathon.upload_service.adapter.persistence.UploadRepository;
 import com.fiap.hackathon.upload_service.domain.Upload;
 import com.fiap.hackathon.upload_service.domain.UploadStatus;
+import com.fiap.hackathon.upload_service.config.observability.UploadMetricsService;
 import com.fiap.hackathon.upload_service.infra.audit.AuditEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.Optional;
 import java.util.UUID;
@@ -19,10 +21,15 @@ public class AnalysisCallbackService {
 
     private final UploadRepository uploadRepository;
     private final AuditEventPublisher auditEventPublisher;
+    private final UploadMetricsService uploadMetricsService;
 
-    public AnalysisCallbackService(UploadRepository uploadRepository, AuditEventPublisher auditEventPublisher) {
+    public AnalysisCallbackService(
+            UploadRepository uploadRepository,
+            AuditEventPublisher auditEventPublisher,
+            UploadMetricsService uploadMetricsService) {
         this.uploadRepository = uploadRepository;
         this.auditEventPublisher = auditEventPublisher;
+        this.uploadMetricsService = uploadMetricsService;
     }
 
     @Transactional
@@ -68,6 +75,7 @@ public class AnalysisCallbackService {
 
         // Persist changes
         Upload updated = uploadRepository.save(upload);
+        recordStatusMetrics(upload, newStatus);
 
         // Publish audit event
         auditEventPublisher.publishEvent(
@@ -144,6 +152,7 @@ public class AnalysisCallbackService {
         }
 
         Upload updated = uploadRepository.save(upload);
+        recordStatusMetrics(upload, newStatus);
 
         auditEventPublisher.publishEvent(
                 AuditEventPublisher.EventType.ANALYSIS_CALLBACK_RECEIVED,
@@ -155,6 +164,19 @@ public class AnalysisCallbackService {
         );
 
         return updated;
+    }
+
+    private void recordStatusMetrics(Upload upload, UploadStatus newStatus) {
+        if (upload.getCreatedAt() == null) {
+            return;
+        }
+        long transitionSeconds = Duration.between(upload.getCreatedAt(), OffsetDateTime.now()).getSeconds();
+        uploadMetricsService.recordStatusTransitionDuration(transitionSeconds, "status:" + newStatus.name());
+
+        if (isFinalStatus(newStatus) && upload.getCompletedAt() != null) {
+            long pipelineSeconds = Duration.between(upload.getCreatedAt(), upload.getCompletedAt()).getSeconds();
+            uploadMetricsService.recordPipelineDuration(pipelineSeconds, "status:" + newStatus.name());
+        }
     }
 
     private UploadStatus mapAnalysisResultToStatus(AnalysisCallbackRequest.AnalysisResult result) {

@@ -4,6 +4,7 @@ import com.fiap.hackathon.upload_service.adapter.dto.ProjectRequest;
 import com.fiap.hackathon.upload_service.adapter.dto.ProjectResponse;
 import com.fiap.hackathon.upload_service.domain.Project;
 import com.fiap.hackathon.upload_service.adapter.persistence.ProjectRepository;
+import com.fiap.hackathon.upload_service.config.observability.TraceSupport;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -29,6 +30,7 @@ public class ProjectController {
 
     @GetMapping
     public ResponseEntity<List<ProjectResponse>> list() {
+        TraceSupport.tagActiveSpan("operation.type", "listProjects");
         List<ProjectResponse> projects = projectRepository.findAll()
                 .stream()
                 .map(this::toResponse)
@@ -38,6 +40,8 @@ public class ProjectController {
 
     @GetMapping("/{projectId}")
     public ResponseEntity<ProjectResponse> getById(@PathVariable UUID projectId) {
+        TraceSupport.tagActiveSpan("operation.type", "findProjectById");
+        TraceSupport.tagActiveSpan("project.id", projectId.toString());
         return projectRepository.findById(projectId)
                 .map(project -> ResponseEntity.ok(toResponse(project)))
                 .orElseGet(() -> ResponseEntity.notFound().build());
@@ -45,7 +49,9 @@ public class ProjectController {
 
     @PostMapping
     public ResponseEntity<ProjectResponse> create(@Valid @RequestBody ProjectRequest req) {
+        TraceSupport.tagActiveSpan("operation.type", "createProject");
         UUID id = UUID.randomUUID();
+        TraceSupport.tagActiveSpan("project.id", id.toString());
         Project p = new Project(id, req.getName(), req.getDescription(), req.getOwnerId(), OffsetDateTime.now());
         projectRepository.save(p);
         return ResponseEntity.ok(toResponse(p));

@@ -4,6 +4,7 @@ import com.fiap.hackathon.upload_service.adapter.dto.AnalysisCallbackRequest;
 import com.fiap.hackathon.upload_service.adapter.persistence.UploadRepository;
 import com.fiap.hackathon.upload_service.domain.Upload;
 import com.fiap.hackathon.upload_service.domain.UploadStatus;
+import com.fiap.hackathon.upload_service.config.observability.UploadMetricsService;
 import com.fiap.hackathon.upload_service.infra.audit.AuditEventPublisher;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -23,13 +24,15 @@ class AnalysisCallbackServiceTest {
     private AnalysisCallbackService service;
     private UploadRepository uploadRepository;
     private AuditEventPublisher auditEventPublisher;
+    private UploadMetricsService uploadMetricsService;
     private final String clientIp = "192.168.1.1";
 
     @BeforeEach
     void setUp() {
         uploadRepository = mock(UploadRepository.class);
         auditEventPublisher = mock(AuditEventPublisher.class);
-        service = new AnalysisCallbackService(uploadRepository, auditEventPublisher);
+        uploadMetricsService = mock(UploadMetricsService.class);
+        service = new AnalysisCallbackService(uploadRepository, auditEventPublisher, uploadMetricsService);
     }
 
     @Test

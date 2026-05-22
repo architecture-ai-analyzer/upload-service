@@ -11,6 +11,7 @@ import com.fiap.hackathon.upload_service.domain.UploadStatus;
 import com.fiap.hackathon.upload_service.infra.aws.S3ClientWrapper;
 import com.fiap.hackathon.upload_service.infra.aws.SqsEventPublisher;
 import com.fiap.hackathon.upload_service.infra.aws.AiAnalysisPayload;
+import com.fiap.hackathon.upload_service.config.observability.UploadMetricsService;
 import com.fiap.hackathon.upload_service.infra.audit.AuditEventPublisher;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.Authentication;
@@ -51,6 +52,7 @@ public class SingleUploadUseCase {
     private final FileSignatureValidator fileSignatureValidator;
     private final AuditEventPublisher auditEventPublisher;
     private final FilenameValidator filenameValidator;
+    private final UploadMetricsService uploadMetricsService;
 
     @Value("${application.sqs.queueUrl:}")
     private String queueUrl;
@@ -65,7 +67,8 @@ public class SingleUploadUseCase {
             ObjectMapper objectMapper,
             FileSignatureValidator fileSignatureValidator,
             AuditEventPublisher auditEventPublisher,
-            FilenameValidator filenameValidator) {
+            FilenameValidator filenameValidator,
+            UploadMetricsService uploadMetricsService) {
         this.s3ClientWrapper = s3ClientWrapper;
         this.uploadRepository = uploadRepository;
         this.sqsEventPublisher = sqsEventPublisher;
@@ -73,6 +76,7 @@ public class SingleUploadUseCase {
         this.fileSignatureValidator = fileSignatureValidator;
         this.auditEventPublisher = auditEventPublisher;
         this.filenameValidator = filenameValidator;
+        this.uploadMetricsService = uploadMetricsService;
     }
 
     public UploadResponse execute(UploadRequest request) throws IOException {
@@ -209,6 +213,8 @@ public class SingleUploadUseCase {
         upload.setCompletedAt(OffsetDateTime.now());
         
         uploadRepository.save(upload);
+
+        uploadMetricsService.recordUploadCreated("content_type:" + fileContentType);
 
         System.out.println("ID SALVO ----------------");
         System.out.println(upload.getId());
