@@ -1,6 +1,7 @@
 package com.fiap.hackathon.upload_service;
 
 import com.fiap.hackathon.upload_service.infra.audit.AuditEvent;
+import com.fiap.hackathon.upload_service.infra.audit.AuditEventPublisher;
 import com.fiap.hackathon.upload_service.infra.audit.AuditEventRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -8,8 +9,10 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.TestPropertySource;
 
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 
 @SpringBootTest
 @TestPropertySource(properties = {
@@ -20,6 +23,9 @@ public class AuditEventTest {
     
     @Autowired
     private AuditEventRepository auditEventRepository;
+
+    @Autowired
+    private AuditEventPublisher auditEventPublisher;
     
     @Test
     public void testAuditEventPersistence() {
@@ -99,5 +105,65 @@ public class AuditEventTest {
         // Then: Verify query results
         assertThat(events).isNotEmpty();
         assertThat(events).allMatch(e -> e.getUserId().equals("test-user-1"));
+    }
+
+    @Test
+    public void testAuditEventPublisherPublishEvent() {
+        // Given: Clear existing events
+        auditEventRepository.deleteAll();
+
+        // When: Publish an event via publisher
+        auditEventPublisher.publishEvent(
+            AuditEventPublisher.EventType.FILE_UPLOAD_SUCCESS,
+            "test-user",
+            "192.168.1.1",
+            "POST /v1/uploads",
+            AuditEventPublisher.ActionResult.SUCCESS
+        );
+
+        // Then: Wait for async operation and verify event was saved
+        await().atMost(5, TimeUnit.SECONDS).until(() -> {
+            List<AuditEvent> events = auditEventRepository.findByEventType(
+                AuditEventPublisher.EventType.FILE_UPLOAD_SUCCESS
+            );
+            return !events.isEmpty();
+        });
+
+        List<AuditEvent> events = auditEventRepository.findByEventType(
+            AuditEventPublisher.EventType.FILE_UPLOAD_SUCCESS
+        );
+        assertThat(events).hasSize(1);
+        assertThat(events.get(0).getUserId()).isEqualTo("test-user");
+        assertThat(events.get(0).getAction()).isEqualTo("POST /v1/uploads");
+    }
+
+    @Test
+    public void testAuditEventPublisherPublishEventWithDetails() {
+        // Given: Clear existing events
+        auditEventRepository.deleteAll();
+
+        // When: Publish an event with details
+        auditEventPublisher.publishEvent(
+            AuditEventPublisher.EventType.AUTHENTICATION_FAILURE,
+            "test-user",
+            "192.168.1.1",
+            "POST /v1/uploads",
+            AuditEventPublisher.ActionResult.FAILURE,
+            "Invalid signature"
+        );
+
+        // Then: Wait for async operation and verify event was saved
+        await().atMost(5, TimeUnit.SECONDS).until(() -> {
+            List<AuditEvent> events = auditEventRepository.findByEventType(
+                AuditEventPublisher.EventType.AUTHENTICATION_FAILURE
+            );
+            return !events.isEmpty();
+        });
+
+        List<AuditEvent> events = auditEventRepository.findByEventType(
+            AuditEventPublisher.EventType.AUTHENTICATION_FAILURE
+        );
+        assertThat(events).hasSize(1);
+        assertThat(events.get(0).getDetails()).isEqualTo("Invalid signature");
     }
 }

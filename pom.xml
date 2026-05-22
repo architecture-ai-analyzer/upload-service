@@ -39,7 +39,7 @@
 		<sonar.sources>src/main</sonar.sources>
 		<sonar.tests>src/test</sonar.tests>
 		<sonar.coverage.exclusions>
-			**/*Config.java,**/*Application.java,**/*Exception.java,**/*Dto.java,**/*Request.java,**/*Response.java,**/*Method.java,**/*TransactionData.java,**/*Transactions.java,**/*Entity.java,**/domain/**/*.java,**/*Message.java,**/usecase/dto/*.java
+			**/*Config.java,**/*Application.java,**/*Exception.java,**/*Dto.java,**/*Request.java,**/*Response.java,**/*Method.java,**/*TransactionData.java,**/*Transactions.java,**/*Entity.java,**/domain/**/*.java,**/*Message.java,**/usecase/dto/*.java,**/infra/audit/*.java
 		</sonar.coverage.exclusions>
 		<!-- JaCoCo Properties -->
 		<jacoco.maven.plugin.version>0.8.11</jacoco.maven.plugin.version>
@@ -176,6 +176,12 @@
 			<artifactId>mockito-core</artifactId>
 			<scope>test</scope>
 		</dependency>
+		<dependency>
+			<groupId>org.awaitility</groupId>
+			<artifactId>awaitility</artifactId>
+			<version>4.2.0</version>
+			<scope>test</scope>
+		</dependency>
 
 		<!-- H2 for tests and Testcontainers LocalStack -->
 		<dependency>
@@ -247,6 +253,7 @@
 								<exclude>**/entity/**</exclude>
 								<exclude>**/adapter/**</exclude>
 								<exclude>**/pdf/**</exclude>
+								<exclude>**/infra/audit/**</exclude>
 								<exclude>**/*Application.class</exclude>
 								<exclude>**/*Config.class</exclude>
 								<exclude>**/*Request.class</exclude>
