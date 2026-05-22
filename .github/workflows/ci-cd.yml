@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - homologation
+      - feature/cicd
   workflow_dispatch:
 
 permissions:
@@ -13,14 +14,14 @@ permissions:
 
 env:
   AWS_REGION: us-east-2
-  ENVIRONMENT: ${{ github.ref_name == 'main' && 'dev' || (github.ref_name == 'homologation' && 'homologation' || 'dev') }}
+  ENVIRONMENT: ${{ github.ref_name == 'main' && 'production' || (github.ref_name == 'homologation' && 'homologation' || 'dev') }}
   DOCKER_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/upload-service
 
 jobs:
   unit-tests:
     name: Run Unit Tests
     runs-on: ubuntu-latest
-    environment: ${{ github.ref_name == 'main' && 'dev' || (github.ref_name == 'homologation' && 'homologation' || 'develop') }}
+    environment: ${{ github.ref_name == 'main' && 'production' || (github.ref_name == 'homologation' && 'homologation' || 'dev') }}
 
     steps:
       - name: Checkout code
@@ -38,7 +39,7 @@ jobs:
   build-and-test:
     name: Build Project
     runs-on: ubuntu-latest
-    environment: ${{ github.ref_name == 'main' && 'dev' || (github.ref_name == 'homologation' && 'homologation' || 'develop') }}
+    environment: ${{ github.ref_name == 'main' && 'production' || (github.ref_name == 'homologation' && 'homologation' || 'dev') }}
     needs: unit-tests
 
     steps:
@@ -57,7 +58,7 @@ jobs:
   quality-check:
     name: SonarQube Quality Gate
     runs-on: ubuntu-latest
-    environment: ${{ github.ref_name == 'main' && 'dev' || (github.ref_name == 'homologation' && 'homologation' || 'develop') }}
+    environment: ${{ github.ref_name == 'main' && 'production' || (github.ref_name == 'homologation' && 'homologation' || 'dev') }}
     needs: build-and-test
 
     steps:
@@ -109,11 +110,11 @@ jobs:
   push-and-deploy:
     name: Push Image & Deploy Infra
     runs-on: ubuntu-latest
-    environment: ${{ github.ref_name == 'main' && 'dev' || (github.ref_name == 'homologation' && 'homologation' || 'develop') }}
+    environment: ${{ github.ref_name == 'main' && 'production' || (github.ref_name == 'homologation' && 'homologation' || 'dev') }}
     needs: [build-and-test, quality-check]
 
     env:
-      TERRAFORM_DIR: infra/
+      TERRAFORM_DIR: terraform/envs/${{ github.ref_name == 'main' && 'production' || (github.ref_name == 'homologation' && 'homologation' || 'dev') }}
 
     steps:
       - name: Checkout code
