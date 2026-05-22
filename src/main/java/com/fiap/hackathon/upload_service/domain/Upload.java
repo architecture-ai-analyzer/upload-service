@@ -30,8 +30,6 @@ public class Upload {
 
     private OffsetDateTime completedAt;
 
-    private String templateId;
-
     public Upload() {}
 
     public Upload(UUID id, String s3Key, String filename, String contentType, Long sizeBytes, String uploaderId, UploadStatus status, OffsetDateTime createdAt) {
@@ -123,13 +121,5 @@ public class Upload {
 
     public void setCompletedAt(OffsetDateTime completedAt) {
         this.completedAt = completedAt;
-    }
-
-    public String getTemplateId() {
-        return templateId;
-    }
-
-    public void setTemplateId(String templateId) {
-        this.templateId = templateId;
     }
 }

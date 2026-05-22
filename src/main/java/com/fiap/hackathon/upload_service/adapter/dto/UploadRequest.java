@@ -16,8 +16,6 @@ public class UploadRequest {
     @NotBlank
     private String uploaderId;
 
-    private String templateId;
-
     
     public MultipartFile getFile() {
         return file;
@@ -51,11 +49,4 @@ public class UploadRequest {
         this.projectId = projectId;
     }
 
-    public String getTemplateId() {
-        return templateId;
-    }
-
-    public void setTemplateId(String templateId) {
-        this.templateId = templateId;
-    }
 }
