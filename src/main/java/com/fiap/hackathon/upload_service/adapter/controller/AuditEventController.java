@@ -2,6 +2,7 @@ package com.fiap.hackathon.upload_service.adapter.controller;
 
 import com.fiap.hackathon.upload_service.infra.audit.AuditEvent;
 import com.fiap.hackathon.upload_service.infra.audit.AuditEventDTO;
+import com.fiap.hackathon.upload_service.config.observability.TraceSupport;
 import com.fiap.hackathon.upload_service.infra.audit.AuditEventRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -34,6 +35,8 @@ public class AuditEventController {
     @GetMapping("/events")
     @PreAuthorize("hasAnyAuthority('SCOPE_audit:read', 'SCOPE_admin')")
     public ResponseEntity<Page<AuditEventDTO>> getAllEvents(Pageable pageable) {
+        TraceSupport.tagActiveSpan("operation.type", "listAuditEvents");
+        TraceSupport.tagActiveSpan("audit.scope", "all");
         Page<AuditEvent> events = auditEventRepository.findAll(pageable);
         List<AuditEventDTO> dtos = events.getContent().stream()
                 .map(AuditEventDTO::new)
@@ -50,6 +53,9 @@ public class AuditEventController {
     public ResponseEntity<Page<AuditEventDTO>> getEventsByType(
             @RequestParam String eventType,
             Pageable pageable) {
+        TraceSupport.tagActiveSpan("operation.type", "listAuditEventsByType");
+        TraceSupport.tagActiveSpan("audit.scope", "by-type");
+        TraceSupport.tagActiveSpan("audit.event_type", eventType);
         LocalDateTime now = LocalDateTime.now();
         LocalDateTime start = now.minusDays(30); // Last 30 days
         Page<AuditEvent> events = auditEventRepository.findByEventTypeAndTimestampBetween(eventType, start, now, pageable);
@@ -68,6 +74,9 @@ public class AuditEventController {
     public ResponseEntity<Page<AuditEventDTO>> getEventsByUserId(
             @RequestParam String userId,
             Pageable pageable) {
+        TraceSupport.tagActiveSpan("operation.type", "listAuditEventsByUser");
+        TraceSupport.tagActiveSpan("audit.scope", "by-user");
+        TraceSupport.tagActiveSpan("audit.user_id", userId);
         LocalDateTime now = LocalDateTime.now();
         LocalDateTime start = now.minusDays(30); // Last 30 days
         Page<AuditEvent> events = auditEventRepository.findByUserIdAndTimestampBetween(userId, start, now, pageable);
@@ -87,6 +96,8 @@ public class AuditEventController {
             @RequestParam LocalDateTime start,
             @RequestParam LocalDateTime end,
             Pageable pageable) {
+        TraceSupport.tagActiveSpan("operation.type", "listAuditEventsByDateRange");
+        TraceSupport.tagActiveSpan("audit.scope", "by-date-range");
         Page<AuditEvent> events = auditEventRepository.findByTimestampBetween(start, end, pageable);
         List<AuditEventDTO> dtos = events.getContent().stream()
                 .map(AuditEventDTO::new)

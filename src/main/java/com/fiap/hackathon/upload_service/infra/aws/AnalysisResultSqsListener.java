@@ -3,7 +3,10 @@ package com.fiap.hackathon.upload_service.infra.aws;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fiap.hackathon.upload_service.adapter.dto.DiagramStatusMessage;
 import com.fiap.hackathon.upload_service.config.SqsResultListenerProperties;
+import com.fiap.hackathon.upload_service.config.observability.TraceSupport;
 import com.fiap.hackathon.upload_service.infra.audit.AuditEventPublisher;
+import io.opentracing.Span;
+import io.opentracing.util.GlobalTracer;
 import com.fiap.hackathon.upload_service.service.AnalysisCallbackService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -60,6 +63,13 @@ public class AnalysisResultSqsListener {
             return;
         }
 
+        Span span = GlobalTracer.get().activeSpan();
+        if (span != null) {
+            span.setTag("operation.type", "sqsPoll");
+            span.setTag("messaging.system", "sqs");
+            span.setTag("messaging.destination", properties.getQueueUrl());
+        }
+
         try {
                 String resolvedQueueUrl = resolveQueueUrl(properties.getQueueUrl());
 
@@ -71,9 +81,6 @@ public class AnalysisResultSqsListener {
 
             ReceiveMessageResponse response = sqsClient.receiveMessage(request);
             List<Message> messages = response.messages();
-            System.out.println("ID SQS ----------------");
-            System.out.println(messages.toString());
-            System.out.println("----------------");
 
             if (messages == null || messages.isEmpty()) {
                 logger.debug("No messages received from analysis result queue");
@@ -87,6 +94,7 @@ public class AnalysisResultSqsListener {
                     processMessage(message);
                     deleteMessage(message, resolvedQueueUrl);
                 } catch (Exception e) {
+                    TraceSupport.addErrorToSpan(e, "SQS_MESSAGE_PROCESSING_ERROR");
                     logger.error("Error processing analysis result message: {}", message.messageId(), e);
                     auditEventPublisher.publishEvent(
                             AuditEventPublisher.EventType.SQS_PUBLISH_FAILURE,
@@ -99,6 +107,7 @@ public class AnalysisResultSqsListener {
                 }
             }
         } catch (Exception e) {
+            TraceSupport.addErrorToSpan(e, "SQS_POLL_ERROR");
             logger.error("Error polling analysis result queue: {}", properties.getQueueUrl(), e);
             auditEventPublisher.publishEvent(
                     AuditEventPublisher.EventType.SQS_PUBLISH_FAILURE,
@@ -116,6 +125,13 @@ public class AnalysisResultSqsListener {
         logger.debug("Processing analysis result message: {}", message.messageId());
         logger.debug("Message body: {}", body);
 
+        Span span = GlobalTracer.get().activeSpan();
+        if (span != null) {
+            span.setTag("operation.type", "sqsProcessMessage");
+            span.setTag("messaging.system", "sqs");
+            span.setTag("messaging.message_id", message.messageId());
+        }
+
         try {
             DiagramStatusMessage payload = objectMapper.readValue(body, DiagramStatusMessage.class);
 
@@ -125,6 +141,9 @@ public class AnalysisResultSqsListener {
             if (payload.getStatus() == null || payload.getStatus().isBlank()) {
                 throw new IllegalArgumentException("Message missing status");
             }
+
+            TraceSupport.tagActiveSpan("upload.id", payload.getDiagramId().toString());
+            TraceSupport.tagActiveSpan("analysis.result", payload.getStatus());
 
             analysisCallbackService.applyDiagramStatusFromQueue(
                     payload.getDiagramId(),

@@ -36,13 +36,32 @@ resource "kubernetes_deployment" "upload_service" {
         }
 
         annotations = {
-          "prometheus.io/scrape" = "true"
-          "prometheus.io/port"   = "8080"
+          "prometheus.io/scrape"                    = "true"
+          "prometheus.io/port"                      = "8080"
+          "tags.datadoghq.com/env"                  = local.environment
+          "tags.datadoghq.com/service"              = var.datadog_service
+          "tags.datadoghq.com/version"              = var.datadog_version
+          "admission.datadoghq.com/enabled"         = "true"
         }
       }
 
       spec {
         service_account_name = kubernetes_service_account.upload_service.metadata[0].name
+
+        volume {
+          name = "dd-java-agent"
+          empty_dir {}
+        }
+
+        init_container {
+          name    = "dd-java-agent-init"
+          image   = "curlimages/curl:8.10.1"
+          command = ["sh", "-c", "curl -L -o /dd/dd-java-agent.jar https://dtdg.co/latest-java-tracer"]
+          volume_mount {
+            name       = "dd-java-agent"
+            mount_path = "/dd"
+          }
+        }
 
         container {
           name              = "upload-service"
@@ -67,6 +86,69 @@ resource "kubernetes_deployment" "upload_service" {
             secret_ref {
               name = kubernetes_secret.upload_service.metadata[0].name
             }
+          }
+
+          # Datadog Configuration
+          env {
+            name  = "JAVA_TOOL_OPTIONS"
+            value = var.datadog_enabled ? "-javaagent:/dd/dd-java-agent.jar" : ""
+          }
+          env {
+            name  = "DD_SERVICE"
+            value = var.datadog_service
+          }
+          env {
+            name  = "DD_ENV"
+            value = local.environment
+          }
+          env {
+            name  = "DD_VERSION"
+            value = var.datadog_version
+          }
+          env {
+            name  = "DD_LOGS_INJECTION"
+            value = var.datadog_enabled ? "true" : "false"
+          }
+          env {
+            name  = "DD_APPSEC_ENABLED"
+            value = var.datadog_enabled ? "true" : "false"
+          }
+          env {
+            name  = "DD_IAST_ENABLED"
+            value = var.datadog_enabled ? "true" : "false"
+          }
+          env {
+            name  = "DD_AGENT_HOST"
+            value = var.datadog_agent_host
+          }
+          env {
+            name  = "DD_DOGSTATSD_PORT"
+            value = "8125"
+          }
+          env {
+            name  = "DATADOG_STATSD_HOST"
+            value = var.datadog_agent_host
+          }
+          env {
+            name  = "DATADOG_STATSD_PORT"
+            value = "8125"
+          }
+          env {
+            name  = "DD_TRACE_DEBUG"
+            value = "false"
+          }
+          env {
+            name  = "DD_TRACE_AGENT_PORT"
+            value = "8126"
+          }
+          env {
+            name  = "DD_AGENT_PORT"
+            value = "8126"
+          }
+
+          volume_mount {
+            name       = "dd-java-agent"
+            mount_path = "/dd"
           }
 
           # Health checks

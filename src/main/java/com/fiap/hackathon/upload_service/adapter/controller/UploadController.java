@@ -5,7 +5,10 @@ import com.fiap.hackathon.upload_service.adapter.dto.UploadRequest;
 import com.fiap.hackathon.upload_service.adapter.dto.UploadResponse;
 import com.fiap.hackathon.upload_service.domain.Upload;
 import com.fiap.hackathon.upload_service.service.UploadService;
+import com.fiap.hackathon.upload_service.config.observability.TraceSupport;
 import com.fiap.hackathon.upload_service.usecase.SingleUploadUseCase;
+import io.opentracing.Span;
+import io.opentracing.util.GlobalTracer;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
@@ -87,6 +90,18 @@ public class UploadController {
     public ResponseEntity<UploadResponse> upload(
             @RequestPart("file") MultipartFile file,
             @RequestPart("metadata") @Valid UploadRequest metadata) {
+        Span span = GlobalTracer.get().activeSpan();
+        if (span != null) {
+            span.setTag("operation.type", "upload");
+            if (metadata.getProjectId() != null) {
+                span.setTag("upload.project_id", metadata.getProjectId().toString());
+            }
+            if (file.getContentType() != null) {
+                span.setTag("upload.content_type", file.getContentType());
+            }
+            span.setTag("upload.size_bytes", String.valueOf(file.getSize()));
+        }
+
         // Basic multipart validation.
         if (file == null || file.isEmpty()) {
             throw new UploadValidationException("FILE_REQUIRED", "File part is required and cannot be empty");
@@ -112,6 +127,10 @@ public class UploadController {
                         throw new UploadValidationException("FILE_UPLOAD_ERROR", "Failed to process uploaded file");
                 }
 
+        if (span != null && response.getUploadId() != null) {
+            span.setTag("upload.id", response.getUploadId());
+        }
+
         // Return 201 Created with Location header
         return ResponseEntity
                 .created(URI.create("/v1/uploads/" + response.getUploadId()))
@@ -120,17 +139,24 @@ public class UploadController {
 
     @GetMapping(params = "projectId")
     public ResponseEntity<List<Upload>> listByProject(@RequestParam("projectId") UUID projectId) {
+        TraceSupport.tagActiveSpan("operation.type", "listByProject");
+        TraceSupport.tagActiveSpan("project.id", projectId.toString());
         List<Upload> uploads = uploadService.listUploadsByProject(projectId);
         return ResponseEntity.ok(uploads);
     }
 
     @GetMapping("/{uploadId}")
     public ResponseEntity<Upload> getById(@PathVariable("uploadId") String uploadId) {
+        TraceSupport.tagActiveSpan("operation.type", "findById");
+        TraceSupport.tagActiveSpan("upload.id", uploadId);
         Upload upload = uploadService.getUpload(java.util.UUID.fromString(uploadId))
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "UPLOAD_NOT_FOUND",
                         "Upload not found for id " + uploadId
                 ));
+        if (upload.getStatus() != null) {
+            TraceSupport.tagActiveSpan("upload.status", upload.getStatus().name());
+        }
         return ResponseEntity.ok(upload);
     }
 
