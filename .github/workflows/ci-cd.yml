@@ -90,7 +90,7 @@ jobs:
       - name: Build and analyze with SonarQube
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        run: mvn -B clean verify org.sonarsource.scanner.maven:sonar-maven-plugin:sonar -Dsonar.login=$SONAR_TOKEN -Dsonar.projectKey=challenger-pos_upload-service -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml
+        run: mvn -B clean verify org.sonarsource.scanner.maven:sonar-maven-plugin:sonar -Dsonar.login=$SONAR_TOKEN -Dsonar.projectKey=architecture-ai-analyzer_upload-service -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml
         continue-on-error: true
 
       - name: Comment PR with SonarQube results
