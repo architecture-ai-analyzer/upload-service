@@ -95,8 +95,8 @@ Feature: Rejeitar uploads invalidos
     And retorna code BAD_REQUEST
     And o detalhe informa incompatibilidade de extensao
 
-  Scenario: Arquivo acima de 1GB
-    Given um arquivo maior que 1GB
+  Scenario: Arquivo acima de 8MB
+    Given um arquivo maior que 8MB
     When o cliente envia POST /v1/uploads
     Then a API responde 400
     And retorna code FILE_SIZE_EXCEEDED
@@ -264,7 +264,7 @@ Feature: Contrato entre frontend e backend
 ```mermaid
 graph TD
     A["📱 Usuario"] -->|Acessa App| B["Upload Page<br>UploadPage.jsx"]
-    B -->|Seleciona PDF/PNG| C["Validacao Frontend<br>Tamanho ≤ 10MB"]
+    B -->|Seleciona PDF/PNG| C["Validacao Frontend<br>Tamanho ≤ 8MB"]
     C -->|Valido| D["Envio Multipart<br>POST /v1/uploads"]
     C -->|Invalido| E["Mensagem de Erro<br>Frontend"]
 
@@ -388,11 +388,11 @@ sequenceDiagram
     participant EXT as Servico<br/>Externo
 
     User->>FE: 1. Seleciona arquivo PDF
-    FE->>FE: 2. Valida tamanho (frontend: ≤10MB)
+    FE->>FE: 2. Valida tamanho (frontend: ≤8MB)
 
     FE->>API: 3. POST /v1/uploads<br/>multipart/form-data
 
-    API->>API: 4. Valida tamanho (backend: ≤1GB)
+    API->>API: 4. Valida tamanho (backend: ≤8MB)
     API->>API: 5. Valida content-type
     API->>API: 6. Valida extensao vs content-type
 

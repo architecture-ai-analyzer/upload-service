@@ -36,7 +36,8 @@ import java.util.UUID;
 @RequestMapping("/v1/uploads")
 public class UploadController {
 
-    private static final long MAX_FILE_SIZE_BYTES = 1024L * 1024L * 1024L; // 1 GiB
+    /** 8 MiB — alinhado ao limite padrão Sonar S5693 (8388608 bytes) e a {@code application.upload.max}. */
+    private static final long MAX_FILE_SIZE_BYTES = 8L * 1024 * 1024;
     private static final Set<String> ALLOWED_CONTENT_TYPES = Set.of(
             "application/pdf",
             "image/png",
@@ -77,7 +78,7 @@ public class UploadController {
     @ApiResponse(responseCode = "201", description = "Upload criado e arquivo enviado com sucesso")
     @ApiResponse(
             responseCode = "400",
-            description = "Payload invalido, contentType nao permitido ou arquivo acima de 1 GiB",
+            description = "Payload invalido, contentType nao permitido ou arquivo acima de 8 MiB",
             content = @Content(
                     mediaType = MediaType.APPLICATION_JSON_VALUE,
                     schema = @Schema(implementation = ApiErrorResponse.class),
@@ -108,7 +109,7 @@ public class UploadController {
         }
 
         if (file.getSize() > MAX_FILE_SIZE_BYTES) {
-            throw new UploadValidationException("FILE_SIZE_EXCEEDED", "File size exceeds maximum allowed size of 1GB");
+            throw new UploadValidationException("FILE_SIZE_EXCEEDED", "File size exceeds maximum allowed size of 8MB");
         }
 
         String fileContentType = file.getContentType() == null ? "" : file.getContentType().toLowerCase();

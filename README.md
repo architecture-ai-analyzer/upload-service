@@ -120,7 +120,7 @@ O projeto **Hackathon Services** aborda o desafio de **receber, armazenar e proc
             │  1. Upload Page (React)  │
             │  - Seleciona arquivo PDF │
             │  - Validação frontend    │
-            │    (tamanho ≤ 10MB)      │
+            │    (tamanho ≤ 8MB)      │
             └──────────┬───────────────┘
                        │
                        ▼
@@ -132,7 +132,7 @@ O projeto **Hackathon Services** aborda o desafio de **receber, armazenar e proc
                        │
          ┌─────────────▼──────────────┐
          │   Backend Validação        │
-         │  - Tamanho (≤ 1GB)        │
+         │  - Tamanho (≤ 8MB)        │
          │  - Content-Type suportado │
          │  - Extensão vs Type       │
          └──────┬──────────┬──────────┘
@@ -314,11 +314,15 @@ ou
 
 | Validação                    | Local                             | Resposta em Erro                      |
 | ---------------------------- | --------------------------------- | ------------------------------------- |
-| **Tamanho arquivo**          | Frontend (≤10MB) + Backend (≤1GB) | `400 FILE_SIZE_EXCEEDED`              |
+| **Tamanho arquivo**          | Frontend + Backend (≤ 8MB, limite Sonar S5693) | `400 FILE_SIZE_EXCEEDED`              |
 | **Content-Type**             | Backend                           | `400 INVALID_CONTENT_TYPE`            |
 | **Extensão vs Content-Type** | Backend                           | `400 BAD_REQUEST` (incompatibilidade) |
 | **Metadata JSON**            | Backend                           | `400 INVALID_MULTIPART_METADATA`      |
 | **Arquivo não existe**       | GET /uploads/{id}                 | `404 UPLOAD_NOT_FOUND`                |
+
+### CSRF e Sonar java:S4502
+
+O Spring Security está configurado com **CSRF desligado** de forma deliberada: a API é **stateless** e a autenticação baseia-se em **cabeçalhos** validados pelo gateway (HMAC), não em cookies de sessão de browser. Para o hotspot **java:S4502** no SonarQube/SonarCloud, usar a revisão de segurança e marcar como **Safe** com a justificativa descrita em [`docs/security.md`](docs/security.md) (secção 1.3). Se no futuro existir login por cookie de sessão, reavaliar e ativar CSRF conforme necessário.
 
 ---
 

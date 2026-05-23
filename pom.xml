@@ -38,6 +38,10 @@
 		<sonar.host.url>https://sonarcloud.io</sonar.host.url>
 		<sonar.sources>src/main</sonar.sources>
 		<sonar.tests>src/test</sonar.tests>
+		<!-- CSRF desligado de forma intencional (API stateless + gateway headers); ver docs/security.md -->
+		<sonar.issue.ignore.multicriteria>csrfS4502SecurityConfig</sonar.issue.ignore.multicriteria>
+		<sonar.issue.ignore.multicriteria.csrfS4502SecurityConfig.ruleKey>java:S4502</sonar.issue.ignore.multicriteria.csrfS4502SecurityConfig.ruleKey>
+		<sonar.issue.ignore.multicriteria.csrfS4502SecurityConfig.resourceKey>**/upload_service/config/SecurityConfig.java</sonar.issue.ignore.multicriteria.csrfS4502SecurityConfig.resourceKey>
 		<sonar.coverage.exclusions>
 			**/*Config.java,**/*Application.java,**/*Exception.java,**/*Dto.java,**/*Request.java,**/*Response.java,**/*Method.java,**/*TransactionData.java,**/*Transactions.java,**/*Entity.java,**/domain/**/*.java,**/*Message.java,**/usecase/dto/*.java,**/infra/audit/*.java
 		</sonar.coverage.exclusions>
