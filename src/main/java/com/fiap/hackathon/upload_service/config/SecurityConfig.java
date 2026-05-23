@@ -38,6 +38,11 @@ public class SecurityConfig {
         this.corsProperties = corsProperties;
     }
 
+    /**
+     * CSRF is intentionally disabled: stateless session policy; authentication uses gateway-signed headers
+     * ({@link GatewayTrustAuthenticationFilter}), not browser session cookies. Sonar java:S4502 should be
+     * reviewed as Safe with justification — see {@code docs/security.md} section 1.3.
+     */
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http.csrf(AbstractHttpConfigurer::disable)

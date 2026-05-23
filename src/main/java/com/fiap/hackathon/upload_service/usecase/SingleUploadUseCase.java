@@ -30,7 +30,8 @@ import java.util.logging.Logger;
 @Service
 public class SingleUploadUseCase {
 
-    private static final long MAX_FILE_SIZE_BYTES = 1024L * 1024L * 1024L; // 1 GiB
+    /** 8 MiB — alinhado ao limite padrão Sonar S5693 (8388608 bytes) e a {@code application.upload.max}. */
+    private static final long MAX_FILE_SIZE_BYTES = 8L * 1024 * 1024;
     private static final Set<String> ALLOWED_CONTENT_TYPES = Set.of(
             "application/pdf",
             "image/png",
@@ -102,9 +103,9 @@ public class SingleUploadUseCase {
                 clientIp,
                 "POST /v1/uploads",
                 AuditEventPublisher.ActionResult.FAILURE,
-                "File size " + file.getSize() + " bytes exceeds maximum allowed size of 1GB"
+                "File size " + file.getSize() + " bytes exceeds maximum allowed size of 8MB"
             );
-            throw new UploadValidationException("FILE_SIZE_EXCEEDED", "File size exceeds maximum allowed size of 1GB");
+            throw new UploadValidationException("FILE_SIZE_EXCEEDED", "File size exceeds maximum allowed size of 8MB");
         }
         String fileContentType = file.getContentType() == null ? "" : file.getContentType().toLowerCase();
         if (!ALLOWED_CONTENT_TYPES.contains(fileContentType)) {

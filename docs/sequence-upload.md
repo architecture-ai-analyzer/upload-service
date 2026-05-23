@@ -45,12 +45,12 @@ Resposta de sucesso (`201 Created`):
 
 - Tipos aceitos: `application/pdf`, `image/png`, `image/jpg`, `image/jpeg`
 - O `contentType` do `metadata` deve ser igual ao `contentType` do arquivo enviado
-- Tamanho maximo do arquivo: `1GB`
+- Tamanho maximo do arquivo: `8MB` (limite Sonar S5693 / `application.upload.max`)
 
 Configuracao relevante:
 
-- `spring.servlet.multipart.max-file-size=1GB`
-- `spring.servlet.multipart.max-request-size=1GB`
+- `spring.servlet.multipart.max-file-size=8MB` (via `application.upload.max`)
+- `spring.servlet.multipart.max-request-size=8MB`
 
 ## Respostas de erro padronizadas
 
@@ -76,13 +76,13 @@ Content-Type invalido (`400`):
 }
 ```
 
-Arquivo acima de 1GB (`400`):
+Arquivo acima de 8MB (`400`):
 
 ```json
 {
   "message": "Invalid upload request",
   "code": "FILE_SIZE_EXCEEDED",
-  "detail": "File size exceeds maximum allowed size of 1GB"
+  "detail": "File size exceeds maximum allowed size of 8MB"
 }
 ```
 
