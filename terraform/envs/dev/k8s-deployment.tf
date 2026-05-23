@@ -172,7 +172,7 @@ resource "kubernetes_deployment" "upload_service" {
               scheme = "HTTP"
             }
 
-            initial_delay_seconds = 30
+            initial_delay_seconds = 60
             period_seconds        = 10
             timeout_seconds       = 5
             failure_threshold     = 3
@@ -182,12 +182,12 @@ resource "kubernetes_deployment" "upload_service" {
           resources {
             requests = {
               cpu    = "250m"
-              memory = "256Mi"
+              memory = "512Mi"
             }
 
             limits = {
               cpu    = "500m"
-              memory = "512Mi"
+              memory = "1Gi"
             }
           }
 

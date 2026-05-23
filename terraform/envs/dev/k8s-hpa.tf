@@ -8,7 +8,7 @@ resource "kubernetes_horizontal_pod_autoscaler" "upload_service" {
   }
 
   spec {
-    max_replicas = 5
+    max_replicas = 3
     min_replicas = 2
 
     scale_target_ref {
