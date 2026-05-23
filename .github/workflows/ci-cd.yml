@@ -1,0 +1,180 @@
+name: CI/CD - Spring Boot Build & Docker Hub Deploy
+
+on:
+  push:
+    branches:
+      - main
+      - homologation
+      - develop
+  workflow_dispatch:
+
+env:
+  AWS_REGION: us-east-2
+  ENVIRONMENT: ${{ github.ref_name == 'main' && 'develop' || (github.ref_name == 'homologation' && 'develop' || 'develop') }}
+  IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/upload-service
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Cache Maven
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2
+          key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+          restore-keys: ${{ runner.os }}-m2
+
+      - name: Build (skip tests)
+        run: mvn -B clean package -DskipTests
+
+  test:
+    name: Automated Tests
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Run tests
+        run: mvn -B test -Dspring.profiles.active=test
+        env:
+          MAVEN_OPTS: -Xmx2048m
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: target/surefire-reports/
+          retention-days: 7
+
+  quality-check:
+    name: SonarCloud Quality Gate
+    runs-on: ubuntu-latest
+    needs: test
+    environment: ${{ github.ref_name == 'main' && 'develop' || (github.ref_name == 'homologation' && 'develop' || 'develop') }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Cache Sonar packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.sonar/cache
+          key: ${{ runner.os }}-sonar
+          restore-keys: ${{ runner.os }}-sonar
+
+      - name: Cache Maven
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2
+          key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+          restore-keys: ${{ runner.os }}-m2
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Build and analyze
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          mvn -B clean verify
+          mvn -B jacoco:report
+          mvn -B sonar:sonar -Dsonar.automatic.analysis.disabled=true
+        continue-on-error: true
+
+  push-and-deploy:
+    name: Push Image & Deploy Infra
+    runs-on: ubuntu-latest
+    needs: quality-check
+    environment: ${{ github.ref_name == 'main' && 'develop' || (github.ref_name == 'homologation' && 'develop' || 'develop') }}
+
+    env:
+      TERRAFORM_DIR: terraform/envs/${{ github.ref_name == 'main' && 'dev' || (github.ref_name == 'homologation' && 'dev' || 'dev') }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set environment tag
+        id: envtag
+        run: |
+          BRANCH_NAME=${GITHUB_REF##*/}
+          echo "TAG=$BRANCH_NAME" >> $GITHUB_ENV
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.7.0"
+          terraform_wrapper: false
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Build JAR for Docker
+        run: mvn -B -DskipTests package
+
+      - name: Build and Push Docker Image
+        run: |
+          docker build -t $IMAGE_NAME:${{ env.TAG }} .
+          docker push $IMAGE_NAME:${{ env.TAG }}
+          docker tag $IMAGE_NAME:${{ env.TAG }} $IMAGE_NAME:latest
+          docker push $IMAGE_NAME:latest
+
+      - name: Terraform Init
+        working-directory: ${{ env.TERRAFORM_DIR }}
+        run: terraform init
+
+      - name: Terraform Apply
+        working-directory: ${{ env.TERRAFORM_DIR }}
+        run: terraform apply -auto-approve
+        env:
+          TF_VAR_environment: ${{ env.ENVIRONMENT }}
+          TF_VAR_rds_password: ${{ secrets.DB_PASSWORD }}
+          TF_VAR_container_image: $IMAGE_NAME:${{ env.TAG }}
+          TF_VAR_aws_access_key_id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          TF_VAR_aws_secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          TF_VAR_s3_bucket_name: ${{ secrets.S3_BUCKET_NAME }}
+          TF_VAR_aws_account_id: ${{ secrets.AWS_ACCOUNT_ID }}

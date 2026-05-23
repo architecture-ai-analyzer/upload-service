@@ -83,6 +83,8 @@ public class UploadIntegrationTest {
         registry.add("cloud.aws.region", () -> localstack.getRegion());
         registry.add("application.s3.bucket", () -> bucketName);
         registry.add("application.sqs.queueUrl", () -> queueUrl);
+        registry.add("app.security.gateway-trust.enabled", () -> "false");
+        registry.add("app.security.rate-limit.upload.enabled", () -> "false");
     }
 
     @AfterAll
@@ -105,8 +107,7 @@ public class UploadIntegrationTest {
         String projectId = String.valueOf(projectBody.get("id"));
 
         // 2) Upload file with metadata in single multipart request
-        String fileContent = "This is a test PDF file content";
-        byte[] fileBytes = fileContent.getBytes();
+        byte[] fileBytes = "%PDF-1.7\n%Test content".getBytes();
         
         HttpResponse<String> uploadResp = postMultipart("/v1/uploads", 
             "diagram.pdf", 
@@ -133,11 +134,11 @@ public class UploadIntegrationTest {
         boolean fileExists = s3client.headObject(HeadObjectRequest.builder().bucket(bucketName).key(s3Key).build()) != null;
         assertThat(fileExists).isTrue();
 
-        // 5) Verify upload status is COMPLETED via GET endpoint
+        // 5) Verify upload status is RECEBIDO via GET endpoint
         HttpResponse<String> statusResp = getJson("/v1/uploads/" + uploadId);
         assertThat(statusResp.statusCode()).isEqualTo(HttpStatus.OK.value());
         Map<String, Object> statusBody = objectMapper.readValue(statusResp.body(), Map.class);
-        assertThat(statusBody.get("status")).isEqualTo("COMPLETED");
+        assertThat(statusBody.get("status")).isEqualTo("RECEBIDO");
     }
 
     @Test
@@ -237,7 +238,7 @@ public class UploadIntegrationTest {
         Map<String, Object> projectBody = objectMapper.readValue(projectResp.body(), Map.class);
         String projectId = String.valueOf(projectBody.get("id"));
 
-        byte[] fileBytes = new byte[] {(byte) 0x89, 0x50, 0x4E, 0x47};
+        byte[] fileBytes = new byte[] {(byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A};
         HttpResponse<String> uploadResp = postMultipart(
             "/v1/uploads",
             "imagem.pdf",
@@ -249,9 +250,36 @@ public class UploadIntegrationTest {
 
         assertThat(uploadResp.statusCode()).isEqualTo(HttpStatus.BAD_REQUEST.value());
         Map<String, Object> errorBody = objectMapper.readValue(uploadResp.body(), Map.class);
-        assertThat(errorBody.get("message")).isEqualTo("Invalid request");
-        assertThat(errorBody.get("code")).isEqualTo("BAD_REQUEST");
+        assertThat(errorBody.get("message")).isEqualTo("Invalid upload request");
+        assertThat(errorBody.get("code")).isEqualTo("EXTENSION_CONTENT_TYPE_MISMATCH");
         assertThat(String.valueOf(errorBody.get("detail"))).contains("extension");
+    }
+
+    @Test
+    public void unifiedUpload_withMagicBytesMismatch_returns400() throws Exception {
+        HttpResponse<String> projectResp = postJson("/v1/projects", Map.of(
+                "name", "Projeto Assinatura",
+                "description", "Projeto para validacao de assinatura",
+                "ownerId", "owner-1"
+        ));
+        assertThat(projectResp.statusCode()).isEqualTo(HttpStatus.OK.value());
+        Map<String, Object> projectBody = objectMapper.readValue(projectResp.body(), Map.class);
+        String projectId = String.valueOf(projectBody.get("id"));
+
+        byte[] pngBytes = new byte[] {(byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A};
+        HttpResponse<String> uploadResp = postMultipart(
+                "/v1/uploads",
+                "arquivo.pdf",
+                "application/pdf",
+                pngBytes,
+                projectId,
+                "user-123"
+        );
+
+        assertThat(uploadResp.statusCode()).isEqualTo(HttpStatus.BAD_REQUEST.value());
+        Map<String, Object> errorBody = objectMapper.readValue(uploadResp.body(), Map.class);
+        assertThat(errorBody.get("message")).isEqualTo("Invalid upload request");
+        assertThat(errorBody.get("code")).isEqualTo("MIME_SIGNATURE_MISMATCH");
     }
 
     @Test
@@ -265,6 +293,45 @@ public class UploadIntegrationTest {
         assertThat(errorBody.get("message")).isEqualTo("Resource not found");
         assertThat(errorBody.get("code")).isEqualTo("UPLOAD_NOT_FOUND");
         assertThat(String.valueOf(errorBody.get("detail"))).contains(unknownUploadId);
+    }
+
+    @Test
+    public void getProjects_returnsPersistedProjects() throws Exception {
+        HttpResponse<String> created = postJson("/v1/projects", Map.of(
+                "name", "Projeto Listagem",
+                "description", "Projeto para teste de listagem",
+                "ownerId", "owner-list"
+        ));
+        assertThat(created.statusCode()).isEqualTo(HttpStatus.OK.value());
+
+        HttpResponse<String> listResp = getJson("/v1/projects");
+        assertThat(listResp.statusCode()).isEqualTo(HttpStatus.OK.value());
+
+        Object[] projects = objectMapper.readValue(listResp.body(), Object[].class);
+        assertThat(projects.length).isGreaterThan(0);
+        assertThat(listResp.body()).contains("Projeto Listagem");
+        assertThat(listResp.body()).contains("owner-list");
+    }
+
+    @Test
+    public void getProjectById_returnsCreatedProject() throws Exception {
+        HttpResponse<String> created = postJson("/v1/projects", Map.of(
+                "name", "Projeto ById",
+                "description", "Projeto para teste por id",
+                "ownerId", "owner-by-id"
+        ));
+        assertThat(created.statusCode()).isEqualTo(HttpStatus.OK.value());
+
+        Map<String, Object> createdBody = objectMapper.readValue(created.body(), Map.class);
+        String projectId = String.valueOf(createdBody.get("id"));
+
+        HttpResponse<String> getResp = getJson("/v1/projects/" + projectId);
+        assertThat(getResp.statusCode()).isEqualTo(HttpStatus.OK.value());
+
+        Map<String, Object> found = objectMapper.readValue(getResp.body(), Map.class);
+        assertThat(found.get("id")).isEqualTo(projectId);
+        assertThat(found.get("name")).isEqualTo("Projeto ById");
+        assertThat(found.get("ownerId")).isEqualTo("owner-by-id");
     }
 
     private HttpResponse<String> postJson(String path, Map<String, Object> body) throws Exception {
