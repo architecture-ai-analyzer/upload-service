@@ -26,6 +26,7 @@ Este documento descreve os controles mínimos de segurança adotados no upload-s
 - Assinatura HMAC-SHA256 obrigatória com proteção anti-replay por timestamp (skew máximo configurável, padrão 300 s).
 - Autorização por escopo: `SCOPE_upload:write`, `SCOPE_upload:read`, `SCOPE_audit:read`, `SCOPE_admin` — cada endpoint restrito individualmente.
 - CORS restrito a origens explícitas (não wildcard); sessão stateless (`SessionCreationPolicy.STATELESS`).
+- **CSRF desativado (`csrf().disable()`) de forma intencional:** a API não usa cookie de sessão para autenticação; a identidade e escopos vêm de cabeçalhos assinados pelo API Gateway (`GatewayTrustAuthenticationFilter`). O risco clássico de CSRF (site malicioso aproveita cookies enviados automaticamente pelo browser) não se aplica da mesma forma. O hotspot Sonar **java:S4502** deve ser tratado na revisão do SonarQube/SonarCloud como **Safe**, com justificativa curta (ver secção dedicada abaixo). **Não** introduzir login baseado em cookie de sessão sem reavaliar e, se necessário, reativar CSRF (padrão double-submit cookie / `X-XSRF-TOKEN`).
 - Gateway trust e rate limiting ativados automaticamente nos perfis `prod` e `homologation`.
 
 **Resiliência e rastreabilidade:**
@@ -61,6 +62,18 @@ Este documento descreve os controles mínimos de segurança adotados no upload-s
 - `.github/workflows/ci-cd.yml` — OIDC AWS, SonarQube
 - `config/GatewayTrustAuthenticationFilterTest.java` — 9 testes de autenticação/autorização
 - `service/AnalysisCallbackServiceTest.java` — 15 testes de callback com idempotência
+
+### 1.3 CSRF e hotspot Sonar java:S4502
+
+O `SecurityConfig` chama `http.csrf(AbstractHttpConfigurer::disable)`.
+
+| Aspeto | Decisão |
+|--------|---------|
+| Porquê desativar | API **stateless**; sem `JSESSIONID` nem cookie de “login”; mutações não dependem de credenciais automáticas de cookie cross-origin. |
+| O que fazer no Sonar | Abrir o **Security Hotspot java:S4502** na linha correspondente e marcar como **Safe** (ou equivalente), por exemplo: *“API stateless; sem autenticação por cookie de sessão; identidade via cabeçalhos HMAC do gateway; CORS restrito.”* |
+| Quando rever | Se passar a existir **autenticação por cookie de sessão** (ou `SameSite` + credenciais mistas com SPA), reavaliar: aí costuma-se **ativar** CSRF (`CookieCsrfTokenRepository`, `SpaCsrfTokenRequestHandler`) e exigir `X-XSRF-TOKEN` nos `POST`/`PUT`/`DELETE` a partir do browser. |
+
+Evitar supressão `// NOSONAR` em linha se a política da equipa exigir sempre revisão explícita no Sonar.
 
 ---
 

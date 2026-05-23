@@ -320,6 +320,10 @@ ou
 | **Metadata JSON**            | Backend                           | `400 INVALID_MULTIPART_METADATA`      |
 | **Arquivo não existe**       | GET /uploads/{id}                 | `404 UPLOAD_NOT_FOUND`                |
 
+### CSRF e Sonar java:S4502
+
+O Spring Security está configurado com **CSRF desligado** de forma deliberada: a API é **stateless** e a autenticação baseia-se em **cabeçalhos** validados pelo gateway (HMAC), não em cookies de sessão de browser. Para o hotspot **java:S4502** no SonarQube/SonarCloud, usar a revisão de segurança e marcar como **Safe** com a justificativa descrita em [`docs/security.md`](docs/security.md) (secção 1.3). Se no futuro existir login por cookie de sessão, reavaliar e ativar CSRF conforme necessário.
+
 ---
 
 ## 🚀 Instruções de Execução
