@@ -19,7 +19,7 @@ variable "region_default" {
 variable "vpc_remote_state_bucket" {
   description = "S3 bucket containing the networking remote state"
   type        = string
-  default     = "tf-state-ia-arch-analyzer"
+  default     = "tf-state-ai-architecture-analyzer"
 }
 
 variable "vpc_remote_state_key" {
@@ -31,7 +31,7 @@ variable "vpc_remote_state_key" {
 variable "eks_remote_state_bucket" {
   description = "S3 bucket containing the EKS remote state"
   type        = string
-  default     = "tf-state-ia-arch-analyzer"
+  default     = "tf-state-ai-architecture-analyzer"
 }
 
 variable "eks_remote_state_key" {
