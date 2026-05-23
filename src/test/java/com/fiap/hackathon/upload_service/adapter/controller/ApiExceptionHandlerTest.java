@@ -164,7 +164,7 @@ class ApiExceptionHandlerTest {
         assertNotNull(body);
         assertEquals("FILE_SIZE_EXCEEDED", body.code());
         assertEquals("Invalid upload request", body.message());
-        assertTrue(body.detail().contains("1GB"));
+        assertTrue(body.detail().contains("8MB"));
     }
 
     @Test

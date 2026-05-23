@@ -110,7 +110,7 @@ class UploadControllerTest {
 
     @Test
     void upload_WithFileSizeExceeded_ShouldThrowException() {
-        byte[] largeFile = new byte[1024 * 1024 * 1024 + 1];
+        byte[] largeFile = new byte[8 * 1024 * 1024 + 1];
         MultipartFile file = new MockMultipartFile("file", "test.pdf", "application/pdf", largeFile);
         UploadRequest metadata = new UploadRequest();
         metadata.setFilename("test.pdf");
