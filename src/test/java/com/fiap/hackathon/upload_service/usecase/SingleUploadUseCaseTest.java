@@ -98,7 +98,7 @@ class SingleUploadUseCaseTest {
 
     @Test
     void execute_WithFileSizeExceeded_ShouldThrowException() throws IOException {
-        byte[] largeFile = new byte[1024 * 1024 * 1024 + 1]; // 1GB + 1 byte
+        byte[] largeFile = new byte[8 * 1024 * 1024 + 1]; // 8 MiB + 1 byte
         MultipartFile file = new MockMultipartFile("file", "test.pdf", "application/pdf", largeFile);
         UploadRequest request = new UploadRequest();
         request.setFile(file);

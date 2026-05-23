@@ -82,7 +82,7 @@ public class ApiExceptionHandler {
                 "FILE_SIZE_EXCEEDED",
                 HttpStatus.BAD_REQUEST,
                 "Invalid upload request",
-                "File size exceeds maximum allowed size of 1GB");
+                "File size exceeds maximum allowed size of 8MB");
     }
 
     @ExceptionHandler({

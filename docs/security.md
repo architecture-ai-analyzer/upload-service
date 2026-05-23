@@ -13,7 +13,7 @@ Este documento descreve os controles mínimos de segurança adotados no upload-s
 **Validação de entrada:**
 
 - Validação de tipo de arquivo por allowlist explícita (`application/pdf`, `image/png`, `image/jpg`, `image/jpeg`).
-- Limite de tamanho máximo de 1 GiB aplicado em duas camadas (controller + use case).
+- Limite de tamanho máximo de 8 MiB aplicado em duas camadas (controller + use case), alinhado ao limite padrão Sonar S5693.
 - Validação de consistência entre extensão do arquivo e content-type declarado.
 - Validação de assinatura real do arquivo via magic bytes (PDF `%PDF-`, PNG 8-byte header, JPEG `FF D8 FF`) — previne bypass de content-type.
 - Sanitização e validação de `filename`: regex `^[a-zA-Z0-9._-]+$`, max 255 chars, bloqueio de 27 padrões perigosos incluindo path traversal (`..`), null bytes, separadores de diretório e injeção de comandos.
@@ -69,7 +69,7 @@ Este documento descreve os controles mínimos de segurança adotados no upload-s
 ### 2.1 Estratégias implementadas
 
 - Validação de presença do arquivo multipart (`file` obrigatório e não vazio) — `FILE_REQUIRED`.
-- Validação de tamanho máximo (1 GiB) em duas camadas: controller + use case — `FILE_SIZE_EXCEEDED`.
+- Validação de tamanho máximo (8 MiB) em duas camadas: controller + use case — `FILE_SIZE_EXCEEDED`.
 - Validação de content-type por allowlist — `INVALID_CONTENT_TYPE`.
 - Validação de assinatura real do arquivo via magic bytes para PDF/PNG/JPEG — `MIME_SIGNATURE_MISMATCH`.
 - Validação de consistência extensão × content-type — `EXTENSION_CONTENT_TYPE_MISMATCH`.
