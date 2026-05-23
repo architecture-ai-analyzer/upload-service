@@ -31,6 +31,18 @@
 		<!-- AWS SDK BOM version -->
 		<aws.sdk.version>2.20.28</aws.sdk.version>
 		<testcontainers.version>1.20.4</testcontainers.version>
+		<!-- SonarQube Properties -->
+		<sonar.organization>architecture-ai-analyzer</sonar.organization>
+		<sonar.projectKey>architecture-ai-analyzer_upload-service</sonar.projectKey>
+		<sonar.projectName>Upload Service</sonar.projectName>
+		<sonar.host.url>https://sonarcloud.io</sonar.host.url>
+		<sonar.sources>src/main</sonar.sources>
+		<sonar.tests>src/test</sonar.tests>
+		<sonar.coverage.exclusions>
+			**/*Config.java,**/*Application.java,**/*Exception.java,**/*Dto.java,**/*Request.java,**/*Response.java,**/*Method.java,**/*TransactionData.java,**/*Transactions.java,**/*Entity.java,**/domain/**/*.java,**/*Message.java,**/usecase/dto/*.java,**/infra/audit/*.java
+		</sonar.coverage.exclusions>
+		<!-- JaCoCo Properties -->
+		<jacoco.maven.plugin.version>0.8.11</jacoco.maven.plugin.version>
 	</properties>
 
 	<dependencyManagement>
@@ -110,10 +122,37 @@
 			<artifactId>micrometer-registry-prometheus</artifactId>
 		</dependency>
 
+		<!-- Datadog observability -->
+		<dependency>
+			<groupId>com.datadoghq</groupId>
+			<artifactId>java-dogstatsd-client</artifactId>
+			<version>4.4.3</version>
+		</dependency>
+		<dependency>
+			<groupId>com.datadoghq</groupId>
+			<artifactId>dd-trace-api</artifactId>
+			<version>1.36.0</version>
+		</dependency>
+		<dependency>
+			<groupId>io.opentracing</groupId>
+			<artifactId>opentracing-api</artifactId>
+			<version>0.33.0</version>
+		</dependency>
+		<dependency>
+			<groupId>io.opentracing</groupId>
+			<artifactId>opentracing-util</artifactId>
+			<version>0.33.0</version>
+		</dependency>
+
 		<dependency>
 			<groupId>org.projectlombok</groupId>
 			<artifactId>lombok</artifactId>
 			<optional>true</optional>
+		</dependency>
+		<dependency>
+			<groupId>org.postgresql</groupId>
+			<artifactId>postgresql</artifactId>
+			<scope>runtime</scope>
 		</dependency>
 
 		<!-- Testing -->
@@ -135,6 +174,12 @@
 		<dependency>
 			<groupId>org.mockito</groupId>
 			<artifactId>mockito-core</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.awaitility</groupId>
+			<artifactId>awaitility</artifactId>
+			<version>4.2.0</version>
 			<scope>test</scope>
 		</dependency>
 
@@ -177,6 +222,89 @@
 						</exclude>
 					</excludes>
 				</configuration>
+			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<configuration>
+					<excludes>
+						<exclude>**/UploadIntegrationTest.java</exclude>
+						<exclude>**/UploadToAnalysisE2ETest.java</exclude>
+					</excludes>
+				</configuration>
+			</plugin>
+			<!-- JaCoCo Plugin for Code Coverage -->
+			<plugin>
+				<groupId>org.jacoco</groupId>
+				<artifactId>jacoco-maven-plugin</artifactId>
+				<version>${jacoco.maven.plugin.version}</version>
+				<executions>
+					<execution>
+						<goals>
+							<goal>prepare-agent</goal>
+						</goals>
+					</execution>
+					<execution>
+						<id>report</id>
+						<phase>test</phase>
+						<goals>
+							<goal>report</goal>
+						</goals>
+					</execution>
+					<execution>
+						<id>jacoco-check</id>
+						<goals>
+							<goal>check</goal>
+						</goals>
+						<configuration>
+							<excludes>
+								<exclude>**/config/**</exclude>
+								<exclude>**/dto/**</exclude>
+								<exclude>**/entity/**</exclude>
+								<exclude>**/adapter/**</exclude>
+								<exclude>**/pdf/**</exclude>
+								<exclude>**/infra/audit/**</exclude>
+								<exclude>**/infra/aws/**</exclude>
+								<exclude>**/*Application.class</exclude>
+								<exclude>**/*Config.class</exclude>
+								<exclude>**/*Request.class</exclude>
+								<exclude>**/*Response.class</exclude>
+								<exclude>**/*Interceptor.class</exclude>
+								<exclude>**/*Filter.class</exclude>
+								<exclude>**/CorsProperties.class</exclude>
+								<exclude>**/SqsDeadLetterEntry.class</exclude>
+								<exclude>**/SqsClientWrapper.class</exclude>
+								<exclude>**/S3ClientWrapper.class</exclude>
+								<exclude>**/SqsFailureClassifier.class</exclude>
+								<exclude>**/UploadController.class</exclude>
+								<exclude>**/ProjectController.class</exclude>
+								<exclude>**/LoggingInterceptor.class</exclude>
+								<exclude>**/UploadRateLimitFilter.class</exclude>
+								<exclude>**/GatewayTrustAuthenticationFilter.class</exclude>
+								<exclude>**/UploadMetricsServiceImpl.class</exclude>
+							</excludes>
+							<rules>
+								<rule>
+									<element>PACKAGE</element>
+									<limits>
+										<limit>
+											<counter>LINE</counter>
+											<value>COVEREDRATIO</value>
+											<minimum>0.80</minimum>
+										</limit>
+									</limits>
+								</rule>
+							</rules>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+
+			<!-- SonarQube Maven Plugin -->
+			<plugin>
+				<groupId>org.sonarsource.scanner.maven</groupId>
+				<artifactId>sonar-maven-plugin</artifactId>
+				<version>4.0.0.4121</version>
 			</plugin>
 		</plugins>
 	</build>

@@ -44,7 +44,7 @@ O projeto **Hackathon Services** aborda o desafio de **receber, armazenar e proc
 #### Infraestrutura
 
 - **Container**: Docker + Docker Compose (desenvolvimento)
-- **Cloud**: AWS (ECS para deploy)
+- **Cloud**: AWS (ECS para deploy) + Docker Hub (registry de imagens)
 - **LocalStack**: Emulação local de S3/SQS (testes)
 
 ### Arquitetura de Componentes
@@ -188,8 +188,9 @@ O projeto **Hackathon Services** aborda o desafio de **receber, armazenar e proc
         ┌──(Serviço Externo processa)──┐
         │                               │
         ▼                               ▼
-   SCANNED_OK              QUARANTINED/ERRO
-   (Arquivo OK)            (Risco detectado)
+         SCANNED_OK         QUARANTINED / ANALYSIS_INVALID /
+         (Arquivo OK)       ANALYSIS_REVIEW_REQUIRED
+                (riscos, inconsistência, revisão manual)
         │                               │
         └───────────┬────────────────────┘
                     │
@@ -219,14 +220,18 @@ O projeto **Hackathon Services** aborda o desafio de **receber, armazenar e proc
     │                  │
     │                  ├─► [SCANNED_OK] → Frontend exibe relatório
     │                  │
-    │                  └─► [QUARANTINED/ERRO] → Frontend exibe erro
+  │                  ├─► [QUARANTINED] → Frontend exibe bloqueio
+  │                  │
+  │                  ├─► [ANALYSIS_INVALID] → Frontend exibe erro de análise
+  │                  │
+  │                  └─► [ANALYSIS_REVIEW_REQUIRED] → Frontend exibe revisão pendente
     │
     └─► [NÃO_PUBLICADO] (se queue URL vazia)
 
 
 Responsabilidades:
 ├─ upload-service: PENDING → COMPLETED
-└─ serviço externo: COMPLETED → SCANNED_OK/QUARANTINED
+└─ serviço externo: COMPLETED → SCANNED_OK / QUARANTINED / ANALYSIS_INVALID / ANALYSIS_REVIEW_REQUIRED
 ```
 
 ### 3. Contrato de API - Principais Endpoints
@@ -319,6 +324,26 @@ ou
 
 ## 🚀 Instruções de Execução
 
+## 🔁 Pipeline CI/CD
+
+- **Build**: executa `mvn -B -ntp verify` em toda `pull_request` e `push`.
+- **Teste de imagem**: executa `docker build` para validar a imagem publicada pela pipeline.
+- **Deploy**: em `push`, resolve o ambiente a partir do nome da branch, publica a imagem no Docker Hub e atualiza o serviço ECS correspondente.
+
+### Convenções da pipeline
+
+- **Região AWS padrão**: `us-east-2`.
+- **Ambiente**: derivado da branch atual, convertido para minúsculas e com caracteres inválidos substituídos por `-`.
+- **Cluster ECS**: `${ECS_CLUSTER_PREFIX}-${branch}`.
+- **Service ECS**: `${ECS_SERVICE_PREFIX}-${branch}`.
+- **Spring profile**: recebe o mesmo nome do ambiente derivado da branch.
+- **Imagem Docker**: `docker.io/<DOCKERHUB_USERNAME>/<DOCKERHUB_IMAGE_NAME>:<github.sha>`.
+
+### Secrets e variables esperados no GitHub
+
+- **Secrets**: `AWS_ROLE_TO_ASSUME`, `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`.
+- **Variables opcionais**: `AWS_REGION`, `DOCKERHUB_IMAGE_NAME`, `ECS_CLUSTER_PREFIX`, `ECS_SERVICE_PREFIX`, `ECS_CONTAINER_NAME`.
+
 ### Pré-requisitos
 
 - **Java 21+** (`java -version`)
@@ -344,6 +369,8 @@ mvn clean install
 ```
 
 #### 2.2 Configurar Ambiente (desenvolvimento local)
+
+> **S3 `405 Method Not Allowed`:** se `CLOUD_AWS_ENDPOINT_S3` (ou o default em `application-dev.properties`) apontar para a **URL do Console AWS** (`console.aws.amazon.com/.../buckets/...`), o SDK tenta `PutObject` em uma página HTML e recebe 405. Use endpoint **vazio** para AWS real (`s3.<região>.amazonaws.com` implícito) ou **`http://localhost:4566`** para LocalStack.
 
 Editar `upload-service/src/main/resources/application-dev.properties`:
 
